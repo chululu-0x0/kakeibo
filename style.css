@@ -104,3 +104,61 @@ h2{font-size:18px;margin-bottom:0}
 @media (max-width:390px){.content{padding-left:10px;padding-right:10px}.calendar-page{margin-left:-10px;margin-right:-10px}.hero-card{padding:17px 13px 15px}.budget-hero-grid{gap:10px}.donut{width:min(43vw,170px)}.donut-center strong{font-size:19px}.summary-card{padding:11px 9px}.summary-mark{width:30px;height:30px}.category-picker{gap:5px}.category-choice{border-radius:14px}.category-choice svg{width:32px;height:32px}.calendar-top{height:54dvh;min-height:380px}.calendar-day{padding:4px 2px}.day-num{width:20px;height:20px}.form-grid.two-col{grid-template-columns:1fr}.settings-actions{grid-template-columns:1fr}.settings-fab{right:10px}}
 @media (min-width:721px){.settings-fab{right:calc((100vw - 720px)/2 + 14px)}.calendar-page{border-left:1px solid var(--line);border-right:1px solid var(--line)}}
 @media (prefers-reduced-motion:reduce){*,*::before,*::after{animation-duration:.001ms!important;transition-duration:.001ms!important;scroll-behavior:auto!important}}
+
+/* v1.2: compact record modal + fixed-cost reserve */
+.fixed-cost-note{margin:-2px 0 10px;padding:9px 10px;border-radius:12px;background:var(--cream-1);color:var(--brown-1);font-size:10px;line-height:1.55}
+
+.transaction-sheet{max-height:calc(100dvh - env(safe-area-inset-top) - env(safe-area-inset-bottom) - 18px);overflow:hidden;padding:8px 14px 12px}
+.transaction-sheet .modal-handle{margin-bottom:6px}
+.transaction-sheet .modal-header{margin-bottom:7px;align-items:center}
+.transaction-sheet .modal-header .mini-label{display:none}
+.transaction-sheet .modal-header h2{font-size:17px}
+.transaction-sheet .icon-close{width:30px;height:30px}
+.compact-transaction-form{display:grid;gap:6px;min-height:0}
+.compact-transaction-form .segmented{margin-bottom:0;border-radius:13px;padding:3px}
+.compact-transaction-form .segmented button{padding:7px 6px;border-radius:10px;font-size:12px}
+.compact-form-row{display:grid;grid-template-columns:74px minmax(0,1fr);align-items:center;gap:8px;min-width:0;color:var(--brown-2)}
+.compact-row-label{font-size:11px;font-weight:800;line-height:1.2}
+.compact-row-control{display:block;min-width:0}
+.compact-row-control>input,.compact-row-control>select{width:100%;height:36px;border:1px solid var(--line);border-radius:11px;background:var(--white);padding:5px 9px;outline:0;font-size:16px}
+.compact-form-row.amount-row{align-items:start}
+.compact-form-row.amount-row>.compact-row-label{padding-top:12px}
+.compact-form-row .big-money-input{height:40px;margin:0;padding:0 9px;border-radius:12px}
+.compact-form-row .big-money-input span{font-size:16px}
+.compact-form-row .big-money-input input{font-size:22px;padding:4px 5px}
+.compact-form-row .quick-amounts{margin-top:4px;gap:4px}
+.compact-form-row .quick-amounts button{padding:4px 1px;border-radius:8px;font-size:9px;line-height:1.2}
+.compact-category-block{min-height:0}
+.compact-category-block .field-label-row{margin:1px 1px 4px}
+.compact-category-block .field-label-row small{font-size:9px}
+.transaction-sheet .category-picker{grid-template-columns:repeat(4,minmax(0,1fr));gap:4px}
+.transaction-sheet .category-choice{aspect-ratio:auto;min-height:55px;border-radius:11px;gap:1px;padding:2px 1px;box-shadow:0 2px 6px rgba(96,76,57,.035)}
+.transaction-sheet .category-choice svg{width:43px;height:43px}
+.transaction-sheet .category-choice span{font-size:8px;line-height:1.05}
+.transaction-sheet .category-choice.is-selected{transform:none;box-shadow:inset 0 0 0 1px var(--cream-4),0 3px 8px rgba(96,76,57,.05)}
+.transaction-sheet .modal-submit{margin-top:1px;padding:10px 14px;border-radius:13px;font-size:12px}
+
+@media (max-width:390px){
+  .transaction-sheet{padding-left:10px;padding-right:10px}
+  .compact-form-row{grid-template-columns:66px minmax(0,1fr);gap:6px}
+  .transaction-sheet .category-picker{gap:3px}
+  .transaction-sheet .category-choice{min-height:52px;border-radius:10px;padding:1px 0}
+  .transaction-sheet .category-choice svg{width:41px;height:41px}
+}
+@media (max-height:720px){
+  .transaction-sheet{padding-top:5px;padding-bottom:8px}
+  .transaction-sheet .modal-handle{margin-bottom:4px}
+  .transaction-sheet .modal-header{margin-bottom:4px}
+  .compact-transaction-form{gap:4px}
+  .compact-transaction-form .segmented button{padding:6px 5px}
+  .compact-form-row{grid-template-columns:64px minmax(0,1fr)}
+  .compact-form-row .big-money-input{height:36px}
+  .compact-form-row.amount-row>.compact-row-label{padding-top:10px}
+  .compact-form-row .quick-amounts{margin-top:3px}
+  .compact-form-row .quick-amounts button{padding:3px 1px}
+  .compact-row-control>input,.compact-row-control>select{height:33px;padding-top:3px;padding-bottom:3px}
+  .compact-category-block .field-label-row{margin-bottom:2px}
+  .transaction-sheet .category-choice{min-height:46px}
+  .transaction-sheet .category-choice svg{width:37px;height:37px}
+  .transaction-sheet .modal-submit{padding:8px 12px}
+}

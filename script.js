@@ -4,7 +4,7 @@ const DB_NAME = 'kotsukotsu-kakeibo';
 const DB_VERSION = 1;
 const STORE_NAME = 'app';
 const STATE_KEY = 'state';
-const APP_VERSION = '1.1';
+const APP_VERSION = '1.2';
 
 const DEFAULT_STATE = {
   budget: 80000,
@@ -119,7 +119,7 @@ function bindEvents(){
     const txDelete = e.target.closest('[data-delete-transaction]');
     if(txDelete){ askConfirm('この記録を削除する？','削除すると元には戻せません。', async () => { state.transactions = state.transactions.filter(t => t.id !== txDelete.dataset.deleteTransaction); await persistState(); renderAll(); showToast('記録を削除したよ'); }); return; }
     const fixedDelete = e.target.closest('[data-delete-fixed]');
-    if(fixedDelete){ askConfirm('この固定費を削除する？','固定費一覧から削除します。', async () => { state.fixedCosts = state.fixedCosts.filter(x => x.id !== fixedDelete.dataset.deleteFixed); await persistState(); renderBudgetPage(); showToast('固定費を削除したよ'); }); }
+    if(fixedDelete){ askConfirm('この固定費を削除する？','固定費一覧から削除します。残り使える金額も自動で再計算されます。', async () => { state.fixedCosts = state.fixedCosts.filter(x => x.id !== fixedDelete.dataset.deleteFixed); await persistState(); renderHome(); renderBudgetPage(); showToast('固定費を削除したよ'); }); }
   });
   dom.confirmCancelBtn.addEventListener('click', () => { confirmAction = null; closeModal('confirmModal'); });
   dom.confirmOkBtn.addEventListener('click', async () => { const fn = confirmAction; confirmAction = null; closeModal('confirmModal'); if(fn) await fn(); });
@@ -141,7 +141,7 @@ function switchPage(page){
   activePage = page;
   document.querySelectorAll('.page').forEach(p => p.classList.toggle('is-active', p.dataset.page === page));
   document.querySelectorAll('[data-page-target]').forEach(b => b.classList.toggle('is-active', b.dataset.pageTarget === page));
-  dom.openSettingsBtn.style.display = page === 'settings' ? 'none' : 'grid';
+  dom.openSettingsBtn.style.display = (page === 'settings' || page === 'history') ? 'none' : 'grid';
   window.scrollTo({top:0,behavior:'auto'});
   if(page === 'history') renderHistory();
   if(page === 'budget') renderBudgetPage();
@@ -181,7 +181,7 @@ async function saveBudget(){
 async function saveFixedCost(e){
   e.preventDefault(); const name = dom.fixedCostName.value.trim(); const amount = parseMoney(dom.fixedCostAmount.value);
   if(!name || amount<=0) return showToast('名前と金額を入力してね');
-  state.fixedCosts.push({id:uid(),name,amount}); await persistState(); dom.fixedCostForm.reset(); closeModal('fixedCostModal'); renderBudgetPage(); showToast('固定費を追加したよ');
+  state.fixedCosts.push({id:uid(),name,amount}); await persistState(); dom.fixedCostForm.reset(); closeModal('fixedCostModal'); renderHome(); renderBudgetPage(); showToast('固定費を追加したよ');
 }
 async function saveSavings(){
   state.savings.balance = Math.max(0,parseMoney(dom.savingsBalanceInput.value)); state.savings.goal = Math.max(0,parseMoney(dom.savingsGoalInput.value)); await persistState(); renderHome(); renderSavings(); showToast('貯金情報を保存したよ');
@@ -200,10 +200,10 @@ function renderHome(){
   const now = new Date();
   const monthItems = transactionsForMonth(now);
   const expenses = monthItems.filter(t=>t.type==='expense'); const incomes = monthItems.filter(t=>t.type==='income');
-  const spent = sum(expenses.map(t=>t.amount)); const income = sum(incomes.map(t=>t.amount)); const budget = Math.max(0,state.budget||0); const remaining = budget-spent; const usedRatio = budget>0 ? Math.min(spent/budget,1) : 0;
+  const spent = sum(expenses.map(t=>t.amount)); const income = sum(incomes.map(t=>t.amount)); const fixedReserved = sum(state.fixedCosts.map(x=>x.amount)); const budget = Math.max(0,state.budget||0); const reservedAndSpent = fixedReserved + spent; const remaining = budget-reservedAndSpent; const usedRatio = budget>0 ? Math.min(reservedAndSpent/budget,1) : 0;
   const daysInMonth = new Date(now.getFullYear(),now.getMonth()+1,0).getDate(); const remainingDays = Math.max(1,daysInMonth-now.getDate()+1); const daily = Math.max(0,remaining)/remainingDays;
   dom.monthLabel.textContent = `${now.getFullYear()}年${now.getMonth()+1}月`;
-  dom.budgetAmount.textContent = yen(budget); dom.spentAmount.textContent = yen(spent); dom.remainingAmount.textContent = signedRemaining(remaining); dom.remainingPercent.textContent = budget>0 ? `${Math.max(0,Math.round((remaining/budget)*100))}%` : '—'; dom.dailyAllowance.textContent = yen(Math.floor(daily)); dom.incomeAmount.textContent = yen(income); dom.balanceAmount.textContent = signedYen(income-spent); dom.budgetDonut.style.setProperty('--progress',`${usedRatio*360}deg`);
+  dom.budgetAmount.textContent = yen(budget); dom.spentAmount.textContent = yen(spent); dom.fixedReservedAmount.textContent = yen(fixedReserved); dom.remainingAmount.textContent = signedRemaining(remaining); dom.remainingPercent.textContent = budget>0 ? `${Math.max(0,Math.round((remaining/budget)*100))}%` : '—'; dom.dailyAllowance.textContent = yen(Math.floor(daily)); dom.incomeAmount.textContent = yen(income); dom.balanceAmount.textContent = signedYen(income-spent); dom.budgetDonut.style.setProperty('--progress',`${usedRatio*360}deg`);
   renderTransactionList(dom.todayTransactionList,state.transactions.filter(t=>t.date===todayIso()).sort(sortNewest),true);
   const totals={}; expenses.forEach(t=>totals[t.categoryId]=(totals[t.categoryId]||0)+t.amount); const entries=Object.entries(totals).sort((a,b)=>b[1]-a[1]).slice(0,6);
   if(!entries.length) dom.categorySummary.innerHTML='<div class="empty-state">まだ支出がないよ。＋から記録してみてね。</div>';

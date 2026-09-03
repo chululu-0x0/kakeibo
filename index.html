@@ -6,7 +6,7 @@
   <meta name="theme-color" content="#fff5c9" />
   <meta name="color-scheme" content="light" />
   <title>こつこつ家計簿</title>
-  <link rel="stylesheet" href="./style.css?v=1.1" />
+  <link rel="stylesheet" href="./style.css?v=1.2" />
 </head>
 <body>
   <div class="app-shell" id="appShell">
@@ -37,7 +37,8 @@
             </div>
             <div class="hero-numbers">
               <div class="hero-stat"><span>予算</span><strong id="budgetAmount">¥0</strong></div>
-              <div class="hero-stat"><span>支出</span><strong id="spentAmount">¥0</strong></div>
+              <div class="hero-stat"><span>通常支出</span><strong id="spentAmount">¥0</strong></div>
+              <div class="hero-stat"><span>固定費確保</span><strong id="fixedReservedAmount">¥0</strong></div>
               <div class="hero-stat emphasis"><span>今日使える目安</span><strong id="dailyAllowance">¥0</strong></div>
             </div>
           </div>
@@ -92,8 +93,9 @@
         </section>
         <section class="section-card soft-card">
           <div class="section-heading"><div><p class="mini-label">FIXED COST</p><h2>固定費</h2></div><button class="small-add-button pop-button" id="addFixedCostBtn" type="button">＋ 追加</button></div>
+          <p class="fixed-cost-note">固定費は毎月の残り予算から先に確保されます。カレンダーの支出には自動追加されません。</p>
           <div class="fixed-cost-list" id="fixedCostList"></div>
-          <div class="fixed-cost-total"><span>合計</span><strong id="fixedCostTotal">¥0</strong></div>
+          <div class="fixed-cost-total"><span>確保する固定費 合計</span><strong id="fixedCostTotal">¥0</strong></div>
         </section>
       </section>
 
@@ -114,7 +116,7 @@
           <div class="settings-actions"><button class="secondary-button pop-button" id="exportJsonBtn" type="button">JSONを書き出す</button><label class="secondary-button pop-button file-button" for="importJsonInput">JSONを読み込む</label><input id="importJsonInput" type="file" accept="application/json,.json" hidden /></div>
           <p class="helper-text">支出・収入、予算、固定費、貯金情報をまとめて保存できます。</p>
         </section>
-        <section class="section-card soft-card"><div class="info-list"><div><span>バージョン</span><strong>v1.1</strong></div><div><span>保存先</span><strong>IndexedDB</strong></div><div><span>オフライン</span><strong>Service Worker</strong></div></div></section>
+        <section class="section-card soft-card"><div class="info-list"><div><span>バージョン</span><strong>v1.2</strong></div><div><span>保存先</span><strong>IndexedDB</strong></div><div><span>オフライン</span><strong>Service Worker</strong></div></div></section>
         <section class="danger-zone soft-card"><div><strong>すべてのデータを初期化</strong><span>この端末内の家計簿データを削除します。</span></div><button class="danger-button pop-button" id="resetDataBtn" type="button">初期化</button></section>
       </section>
     </main>
@@ -132,15 +134,34 @@
     <section class="modal-sheet transaction-sheet" role="dialog" aria-modal="true" aria-labelledby="transactionModalTitle">
       <div class="modal-handle"></div>
       <div class="modal-header"><div><p class="mini-label">NEW RECORD</p><h2 id="transactionModalTitle">記録を追加</h2></div><button class="icon-close pop-button" data-close-modal="transactionModal" type="button" aria-label="閉じる">×</button></div>
-      <form id="transactionForm">
+      <form id="transactionForm" class="compact-transaction-form">
         <div class="segmented" id="transactionTypeControl"><button class="is-active pop-button" type="button" data-type="expense">支出</button><button class="pop-button" type="button" data-type="income">収入</button></div>
-        <label class="field-label" for="transactionAmount">金額</label>
-        <div class="big-money-input"><span>¥</span><input id="transactionAmount" inputmode="numeric" autocomplete="off" maxlength="12" placeholder="0" required /></div>
-        <div class="quick-amounts"><button type="button" class="pop-button" data-add-amount="100">+100</button><button type="button" class="pop-button" data-add-amount="500">+500</button><button type="button" class="pop-button" data-add-amount="1000">+1,000</button><button type="button" class="pop-button" data-add-amount="5000">+5,000</button></div>
-        <div class="field-label-row"><span class="field-label">カテゴリー</span><small>タップで選択</small></div>
-        <div class="category-picker" id="categoryPicker"></div>
-        <div class="form-grid two-col"><label><span>日付</span><input id="transactionDate" type="date" required /></label><label><span>支払い方法</span><select id="paymentMethod"><option>現金</option><option>クレジットカード</option><option>PayPay</option><option>銀行振込</option><option>その他</option></select></label></div>
-        <label class="full-field"><span>メモ</span><input id="transactionMemo" type="text" maxlength="60" placeholder="スーパー、ゲームなど" /></label>
+
+        <div class="compact-form-row amount-row">
+          <label class="compact-row-label" for="transactionAmount">金額</label>
+          <div class="compact-row-control">
+            <div class="big-money-input"><span>¥</span><input id="transactionAmount" inputmode="numeric" autocomplete="off" maxlength="12" placeholder="0" required /></div>
+            <div class="quick-amounts"><button type="button" class="pop-button" data-add-amount="100">+100</button><button type="button" class="pop-button" data-add-amount="500">+500</button><button type="button" class="pop-button" data-add-amount="1000">+1,000</button><button type="button" class="pop-button" data-add-amount="5000">+5,000</button></div>
+          </div>
+        </div>
+
+        <div class="compact-category-block">
+          <div class="field-label-row"><span class="field-label">カテゴリー</span><small>タップで選択</small></div>
+          <div class="category-picker" id="categoryPicker"></div>
+        </div>
+
+        <label class="compact-form-row" for="transactionDate">
+          <span class="compact-row-label">日付</span>
+          <span class="compact-row-control"><input id="transactionDate" type="date" required /></span>
+        </label>
+        <label class="compact-form-row" for="paymentMethod">
+          <span class="compact-row-label">支払い方法</span>
+          <span class="compact-row-control"><select id="paymentMethod"><option>現金</option><option>クレジットカード</option><option>PayPay</option><option>銀行振込</option><option>その他</option></select></span>
+        </label>
+        <label class="compact-form-row" for="transactionMemo">
+          <span class="compact-row-label">メモ</span>
+          <span class="compact-row-control"><input id="transactionMemo" type="text" maxlength="60" placeholder="スーパー、ゲームなど" /></span>
+        </label>
         <button class="primary-button modal-submit pop-button" type="submit">登録する</button>
       </form>
     </section>
@@ -159,6 +180,6 @@
   </div>
 
   <div class="toast" id="toast" role="status" aria-live="polite"></div>
-  <script src="./script.js?v=1.1" defer></script>
+  <script src="./script.js?v=1.2" defer></script>
 </body>
 </html>
