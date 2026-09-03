@@ -3,258 +3,162 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, minimum-scale=1, user-scalable=no, viewport-fit=cover" />
-  <meta name="theme-color" content="#fff7cf" />
+  <meta name="theme-color" content="#fff5c9" />
   <meta name="color-scheme" content="light" />
-  <title>こつこつ家計簿 v1.0</title>
-  <link rel="stylesheet" href="./style.css" />
+  <title>こつこつ家計簿</title>
+  <link rel="stylesheet" href="./style.css?v=1.1" />
 </head>
 <body>
   <div class="app-shell" id="appShell">
-    <header class="app-header">
-      <div>
-        <p class="eyebrow">HOUSEHOLD NOTE</p>
-        <h1>こつこつ家計簿</h1>
-      </div>
-      <button class="icon-button bounce-button" id="openSettingsBtn" type="button" aria-label="設定を開く">
-        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 8.2A3.8 3.8 0 1 0 12 15.8 3.8 3.8 0 0 0 12 8.2Zm8.2 4.8-.02-2-2.15-.7a7.46 7.46 0 0 0-.7-1.68l1.04-2-1.43-1.41-1.98 1.05a7.6 7.6 0 0 0-1.7-.7L12.56 3h-2.02l-.7 2.16a7.7 7.7 0 0 0-1.69.7L6.14 4.8 4.72 6.22l1.05 2a7.78 7.78 0 0 0-.7 1.68L2.9 10.6v2.02l2.17.7c.16.6.39 1.16.7 1.69l-1.05 2 1.42 1.42 2.01-1.06c.52.3 1.09.54 1.69.7l.7 2.16h2.02l.7-2.16a7.65 7.65 0 0 0 1.7-.7l1.98 1.06 1.43-1.42-1.04-2a7.3 7.3 0 0 0 .7-1.69l2.17-.7Z"/></svg>
-      </button>
-    </header>
+    <button class="settings-fab pop-button" id="openSettingsBtn" type="button" aria-label="設定を開く">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 8.2A3.8 3.8 0 1 0 12 15.8 3.8 3.8 0 0 0 12 8.2Zm8.2 4.8-.02-2-2.15-.7a7.46 7.46 0 0 0-.7-1.68l1.04-2-1.43-1.41-1.98 1.05a7.6 7.6 0 0 0-1.7-.7L12.56 3h-2.02l-.7 2.16a7.7 7.7 0 0 0-1.69.7L6.14 4.8 4.72 6.22l1.05 2a7.78 7.78 0 0 0-.7 1.68L2.9 10.6v2.02l2.17.7c.16.6.39 1.16.7 1.69l-1.05 2 1.42 1.42 2.01-1.06c.52.3 1.09.54 1.69.7l.7 2.16h2.02l.7-2.16a7.65 7.65 0 0 0 1.7-.7l1.98 1.06 1.43-1.42-1.04-2a7.3 7.3 0 0 0 .7-1.69l2.17-.7Z"/></svg>
+    </button>
 
     <main class="content" id="mainContent">
-      <section class="page is-active" data-page="home" aria-label="ホーム">
+      <section class="page is-active home-page" data-page="home" aria-label="ホーム">
         <section class="hero-card soft-card">
           <div class="month-row">
             <div>
-              <p class="mini-label" id="monthLabel">2026年9月</p>
-              <h2>今月あと使えるお金</h2>
+              <p class="mini-label" id="monthLabel"></p>
+              <h1>今月あと使えるお金</h1>
             </div>
-            <button class="tiny-button bounce-button" id="editBudgetFromHome" type="button">予算変更</button>
+            <button class="tiny-button pop-button" id="editBudgetFromHome" type="button">予算変更</button>
           </div>
 
           <div class="budget-hero-grid">
             <div class="donut-wrap" aria-label="今月の予算使用率">
-              <div class="donut" id="budgetDonut" style="--progress: 0deg;">
+              <div class="donut" id="budgetDonut" style="--progress:0deg">
                 <div class="donut-center">
-                  <span class="donut-caption">残り</span>
-                  <strong id="remainingAmount">¥80,000</strong>
-                  <small id="remainingPercent">100%</small>
+                  <span>残り</span>
+                  <strong id="remainingAmount">¥0</strong>
+                  <small id="remainingPercent">—</small>
                 </div>
               </div>
             </div>
             <div class="hero-numbers">
-              <div class="hero-stat">
-                <span>今月の予算</span>
-                <strong id="budgetAmount">¥80,000</strong>
-              </div>
-              <div class="hero-stat">
-                <span>使った金額</span>
-                <strong id="spentAmount">¥0</strong>
-              </div>
-              <div class="hero-stat accent-stat">
-                <span>今日使える目安</span>
-                <strong id="dailyAllowance">¥0</strong>
-              </div>
+              <div class="hero-stat"><span>予算</span><strong id="budgetAmount">¥0</strong></div>
+              <div class="hero-stat"><span>支出</span><strong id="spentAmount">¥0</strong></div>
+              <div class="hero-stat emphasis"><span>今日使える目安</span><strong id="dailyAllowance">¥0</strong></div>
             </div>
           </div>
         </section>
 
         <section class="summary-grid">
-          <article class="summary-card soft-card">
-            <span class="summary-icon">＋</span>
-            <div><span>今月の収入</span><strong id="incomeAmount">¥0</strong></div>
-          </article>
-          <article class="summary-card soft-card">
-            <span class="summary-icon">＝</span>
-            <div><span>今月の収支</span><strong id="balanceAmount">¥0</strong></div>
-          </article>
+          <article class="summary-card soft-card"><span class="summary-mark income-mark">＋</span><div><span>今月の収入</span><strong id="incomeAmount">¥0</strong></div></article>
+          <article class="summary-card soft-card"><span class="summary-mark">＝</span><div><span>今月の収支</span><strong id="balanceAmount">¥0</strong></div></article>
         </section>
 
         <section class="section-card soft-card">
-          <div class="section-heading">
-            <div><p class="mini-label">TODAY</p><h2>今日の記録</h2></div>
-            <button class="text-button bounce-button" data-go-page="history" type="button">履歴を見る</button>
-          </div>
+          <div class="section-heading"><div><p class="mini-label">TODAY</p><h2>今日の記録</h2></div><button class="text-button pop-button" data-go-page="history" type="button">カレンダー</button></div>
           <div class="transaction-list compact" id="todayTransactionList"></div>
         </section>
 
         <section class="section-card soft-card">
-          <div class="section-heading">
-            <div><p class="mini-label">CATEGORY</p><h2>今月の内訳</h2></div>
-          </div>
+          <div class="section-heading"><div><p class="mini-label">CATEGORY</p><h2>今月の内訳</h2></div></div>
           <div class="category-summary" id="categorySummary"></div>
         </section>
 
         <section class="section-card soft-card">
-          <div class="section-heading">
-            <div><p class="mini-label">SAVINGS</p><h2>貯金</h2></div>
-            <button class="text-button bounce-button" data-go-page="savings" type="button">くわしく</button>
-          </div>
-          <div class="savings-preview">
-            <div>
-              <span>現在</span>
-              <strong id="homeSavingsBalance">¥0</strong>
-            </div>
-            <div class="mini-progress"><span id="homeSavingsProgress"></span></div>
-            <small id="homeSavingsCaption">目標 ¥1,500,000</small>
-          </div>
+          <div class="section-heading"><div><p class="mini-label">SAVINGS</p><h2>貯金</h2></div><button class="text-button pop-button" data-go-page="savings" type="button">くわしく</button></div>
+          <div class="savings-preview"><div><span>現在</span><strong id="homeSavingsBalance">¥0</strong></div><div class="mini-progress"><span id="homeSavingsProgress"></span></div><small id="homeSavingsCaption">目標未設定</small></div>
         </section>
       </section>
 
-      <section class="page" data-page="history" aria-label="履歴">
-        <section class="page-title-row">
-          <div><p class="eyebrow">HISTORY</p><h2>履歴</h2></div>
-          <div class="month-switcher">
-            <button class="icon-button bounce-button" id="prevHistoryMonth" type="button" aria-label="前月">‹</button>
-            <strong id="historyMonthLabel">2026年9月</strong>
-            <button class="icon-button bounce-button" id="nextHistoryMonth" type="button" aria-label="翌月">›</button>
+      <section class="page calendar-page" data-page="history" aria-label="カレンダー">
+        <div class="calendar-top">
+          <div class="calendar-month-switcher">
+            <button class="calendar-arrow pop-button" id="prevHistoryMonth" type="button" aria-label="前月">‹</button>
+            <button class="calendar-month-label pop-button" id="jumpTodayBtn" type="button"><strong id="historyMonthLabel"></strong><small>今日へ戻る</small></button>
+            <button class="calendar-arrow pop-button" id="nextHistoryMonth" type="button" aria-label="翌月">›</button>
           </div>
-        </section>
-        <section class="section-card soft-card">
-          <div class="history-summary-row">
-            <div><span>支出</span><strong id="historyExpenseTotal">¥0</strong></div>
-            <div><span>収入</span><strong id="historyIncomeTotal">¥0</strong></div>
+          <div class="weekday-row" aria-hidden="true"><span>日</span><span>月</span><span>火</span><span>水</span><span>木</span><span>金</span><span>土</span></div>
+          <div class="calendar-grid" id="calendarGrid"></div>
+        </div>
+        <div class="calendar-detail" id="calendarDetail">
+          <div class="detail-head">
+            <div><p class="mini-label">DETAIL</p><h2 id="selectedDateLabel">今日の内訳</h2></div>
+            <div class="detail-totals"><span class="expense-text">支出 <strong id="selectedExpenseTotal">¥0</strong></span><span class="income-text">収入 <strong id="selectedIncomeTotal">¥0</strong></span></div>
           </div>
-          <div class="transaction-list" id="historyTransactionList"></div>
-        </section>
+          <div class="transaction-list detail-list" id="selectedDateTransactionList"></div>
+        </div>
       </section>
 
       <section class="page" data-page="budget" aria-label="予算と固定費">
-        <section class="page-title-row">
-          <div><p class="eyebrow">BUDGET</p><h2>予算と固定費</h2></div>
-        </section>
-
+        <section class="page-title-row"><div><p class="mini-label">BUDGET</p><h2>予算と固定費</h2></div></section>
         <section class="section-card soft-card budget-edit-card">
-          <div class="section-heading"><div><p class="mini-label">MONTHLY</p><h2>月間予算</h2></div></div>
           <label class="field-label" for="budgetInput">今月使っていい金額</label>
-          <div class="money-input-row">
-            <span>¥</span><input id="budgetInput" inputmode="numeric" type="text" maxlength="12" autocomplete="off" />
-          </div>
-          <button class="primary-button bounce-button" id="saveBudgetBtn" type="button">予算を保存</button>
+          <div class="money-input-row"><span>¥</span><input id="budgetInput" inputmode="numeric" type="text" maxlength="12" autocomplete="off" /></div>
+          <button class="primary-button pop-button" id="saveBudgetBtn" type="button">予算を保存</button>
         </section>
-
         <section class="section-card soft-card">
-          <div class="section-heading">
-            <div><p class="mini-label">FIXED COST</p><h2>固定費</h2></div>
-            <button class="small-add-button bounce-button" id="addFixedCostBtn" type="button">＋ 追加</button>
-          </div>
+          <div class="section-heading"><div><p class="mini-label">FIXED COST</p><h2>固定費</h2></div><button class="small-add-button pop-button" id="addFixedCostBtn" type="button">＋ 追加</button></div>
           <div class="fixed-cost-list" id="fixedCostList"></div>
           <div class="fixed-cost-total"><span>合計</span><strong id="fixedCostTotal">¥0</strong></div>
-          <p class="helper-text">固定費は毎月の見通し用です。支出履歴への自動計上は Ver.1.1 以降で拡張できます。</p>
         </section>
       </section>
 
       <section class="page" data-page="savings" aria-label="貯金">
-        <section class="page-title-row"><div><p class="eyebrow">SAVINGS</p><h2>貯金</h2></div></section>
+        <section class="page-title-row"><div><p class="mini-label">SAVINGS</p><h2>貯金</h2></div></section>
         <section class="section-card soft-card">
-          <div class="savings-big-number">
-            <span>現在の貯金</span>
-            <strong id="savingsBalanceDisplay">¥0</strong>
-          </div>
-          <div class="savings-ring-row">
-            <div class="small-donut" id="savingsDonut" style="--progress: 0deg;"><span id="savingsPercent">0%</span></div>
-            <div><span>目標</span><strong id="savingsGoalDisplay">¥1,500,000</strong><small id="savingsRemainingDisplay">あと ¥1,500,000</small></div>
-          </div>
-          <div class="form-grid two-col">
-            <label><span>現在額</span><input id="savingsBalanceInput" inputmode="numeric" type="text" maxlength="12" /></label>
-            <label><span>目標額</span><input id="savingsGoalInput" inputmode="numeric" type="text" maxlength="12" /></label>
-          </div>
-          <button class="primary-button bounce-button" id="saveSavingsBtn" type="button">貯金情報を保存</button>
+          <div class="savings-big-number"><span>現在の貯金</span><strong id="savingsBalanceDisplay">¥0</strong></div>
+          <div class="savings-ring-row"><div class="small-donut" id="savingsDonut" style="--progress:0deg"><span id="savingsPercent">0%</span></div><div><span>目標</span><strong id="savingsGoalDisplay">¥0</strong><small id="savingsRemainingDisplay">あと ¥0</small></div></div>
+          <div class="form-grid two-col"><label><span>現在額</span><input id="savingsBalanceInput" inputmode="numeric" type="text" maxlength="12" /></label><label><span>目標額</span><input id="savingsGoalInput" inputmode="numeric" type="text" maxlength="12" /></label></div>
+          <button class="primary-button pop-button" id="saveSavingsBtn" type="button">貯金情報を保存</button>
         </section>
       </section>
 
       <section class="page" data-page="settings" aria-label="設定">
-        <section class="page-title-row"><div><p class="eyebrow">SETTINGS</p><h2>設定・バックアップ</h2></div></section>
+        <section class="page-title-row settings-title-row"><div><p class="mini-label">SETTINGS</p><h2>設定・バックアップ</h2></div><button class="icon-close pop-button" id="closeSettingsPageBtn" type="button" aria-label="設定を閉じる">×</button></section>
         <section class="section-card soft-card">
           <div class="section-heading"><div><p class="mini-label">DATA</p><h2>バックアップ</h2></div></div>
-          <div class="settings-actions">
-            <button class="secondary-button bounce-button" id="exportJsonBtn" type="button">JSONを書き出す</button>
-            <label class="secondary-button bounce-button file-button" for="importJsonInput">JSONを読み込む</label>
-            <input id="importJsonInput" type="file" accept="application/json,.json" hidden />
-          </div>
+          <div class="settings-actions"><button class="secondary-button pop-button" id="exportJsonBtn" type="button">JSONを書き出す</button><label class="secondary-button pop-button file-button" for="importJsonInput">JSONを読み込む</label><input id="importJsonInput" type="file" accept="application/json,.json" hidden /></div>
           <p class="helper-text">支出・収入、予算、固定費、貯金情報をまとめて保存できます。</p>
         </section>
-        <section class="section-card soft-card">
-          <div class="section-heading"><div><p class="mini-label">APP</p><h2>このバージョン</h2></div></div>
-          <dl class="info-list">
-            <div><dt>バージョン</dt><dd>v1.0</dd></div>
-            <div><dt>保存先</dt><dd>IndexedDB（端末内）</dd></div>
-            <div><dt>メインカラー</dt><dd>ホワイト × クリームイエロー</dd></div>
-          </dl>
-        </section>
-        <section class="danger-zone soft-card">
-          <div><strong>すべてのデータを初期化</strong><span>この端末内の家計簿データを削除します。</span></div>
-          <button class="danger-button bounce-button" id="resetDataBtn" type="button">初期化</button>
-        </section>
+        <section class="section-card soft-card"><div class="info-list"><div><span>バージョン</span><strong>v1.1</strong></div><div><span>保存先</span><strong>IndexedDB</strong></div><div><span>オフライン</span><strong>Service Worker</strong></div></div></section>
+        <section class="danger-zone soft-card"><div><strong>すべてのデータを初期化</strong><span>この端末内の家計簿データを削除します。</span></div><button class="danger-button pop-button" id="resetDataBtn" type="button">初期化</button></section>
       </section>
     </main>
 
     <nav class="bottom-nav" aria-label="メインナビゲーション">
       <button class="nav-button is-active" data-page-target="home" type="button"><span>⌂</span><small>ホーム</small></button>
-      <button class="nav-button" data-page-target="history" type="button"><span>◷</span><small>履歴</small></button>
-      <button class="fab bounce-button" id="openTransactionBtn" type="button" aria-label="記録を追加"><span>＋</span></button>
+      <button class="nav-button" data-page-target="history" type="button"><span>▦</span><small>カレンダー</small></button>
+      <button class="fab pop-button" id="openTransactionBtn" type="button" aria-label="記録を追加"><span>＋</span></button>
       <button class="nav-button" data-page-target="budget" type="button"><span>◫</span><small>予算</small></button>
       <button class="nav-button" data-page-target="savings" type="button"><span>♡</span><small>貯金</small></button>
     </nav>
   </div>
 
   <div class="modal-backdrop" id="transactionModal" aria-hidden="true">
-    <section class="modal-card pop-modal" role="dialog" aria-modal="true" aria-labelledby="transactionModalTitle">
-      <div class="modal-header">
-        <div><p class="mini-label">NEW RECORD</p><h2 id="transactionModalTitle">記録を追加</h2></div>
-        <button class="icon-button close-modal bounce-button" data-close-modal="transactionModal" type="button" aria-label="閉じる">×</button>
-      </div>
-      <div class="segment-control" id="transactionTypeControl">
-        <button class="is-active" data-type="expense" type="button">支出</button>
-        <button data-type="income" type="button">収入</button>
-      </div>
+    <section class="modal-sheet transaction-sheet" role="dialog" aria-modal="true" aria-labelledby="transactionModalTitle">
+      <div class="modal-handle"></div>
+      <div class="modal-header"><div><p class="mini-label">NEW RECORD</p><h2 id="transactionModalTitle">記録を追加</h2></div><button class="icon-close pop-button" data-close-modal="transactionModal" type="button" aria-label="閉じる">×</button></div>
       <form id="transactionForm">
+        <div class="segmented" id="transactionTypeControl"><button class="is-active pop-button" type="button" data-type="expense">支出</button><button class="pop-button" type="button" data-type="income">収入</button></div>
         <label class="field-label" for="transactionAmount">金額</label>
-        <div class="money-input-row large"><span>¥</span><input id="transactionAmount" inputmode="numeric" type="text" maxlength="12" autocomplete="off" required /></div>
-        <div class="quick-amounts" id="quickAmounts">
-          <button type="button" data-add-amount="100">+100</button>
-          <button type="button" data-add-amount="500">+500</button>
-          <button type="button" data-add-amount="1000">+1000</button>
-        </div>
-
-        <label class="field-label">カテゴリ</label>
+        <div class="big-money-input"><span>¥</span><input id="transactionAmount" inputmode="numeric" autocomplete="off" maxlength="12" placeholder="0" required /></div>
+        <div class="quick-amounts"><button type="button" class="pop-button" data-add-amount="100">+100</button><button type="button" class="pop-button" data-add-amount="500">+500</button><button type="button" class="pop-button" data-add-amount="1000">+1,000</button><button type="button" class="pop-button" data-add-amount="5000">+5,000</button></div>
+        <div class="field-label-row"><span class="field-label">カテゴリー</span><small>タップで選択</small></div>
         <div class="category-picker" id="categoryPicker"></div>
-
-        <div class="form-grid two-col">
-          <label><span>日付</span><input id="transactionDate" type="date" required /></label>
-          <label><span>支払い方法</span><select id="paymentMethod"><option>現金</option><option>クレジットカード</option><option>PayPay</option><option>銀行振込</option><option>その他</option></select></label>
-        </div>
-        <label class="full-field"><span>メモ</span><input id="transactionMemo" type="text" maxlength="80" placeholder="スーパー、ゲームなど" /></label>
-        <button class="primary-button big bounce-button" type="submit">この内容で登録</button>
+        <div class="form-grid two-col"><label><span>日付</span><input id="transactionDate" type="date" required /></label><label><span>支払い方法</span><select id="paymentMethod"><option>現金</option><option>クレジットカード</option><option>PayPay</option><option>銀行振込</option><option>その他</option></select></label></div>
+        <label class="full-field"><span>メモ</span><input id="transactionMemo" type="text" maxlength="60" placeholder="スーパー、ゲームなど" /></label>
+        <button class="primary-button modal-submit pop-button" type="submit">登録する</button>
       </form>
     </section>
   </div>
 
   <div class="modal-backdrop" id="fixedCostModal" aria-hidden="true">
-    <section class="modal-card pop-modal small-modal" role="dialog" aria-modal="true" aria-labelledby="fixedCostModalTitle">
-      <div class="modal-header"><div><p class="mini-label">FIXED COST</p><h2 id="fixedCostModalTitle">固定費を追加</h2></div><button class="icon-button close-modal bounce-button" data-close-modal="fixedCostModal" type="button">×</button></div>
-      <form id="fixedCostForm">
-        <label class="full-field"><span>名前</span><input id="fixedCostName" type="text" maxlength="30" placeholder="家賃、スマホなど" required /></label>
-        <label class="field-label" for="fixedCostAmount">金額</label>
-        <div class="money-input-row"><span>¥</span><input id="fixedCostAmount" inputmode="numeric" type="text" maxlength="12" required /></div>
-        <button class="primary-button bounce-button" type="submit">追加する</button>
-      </form>
+    <section class="modal-sheet small-sheet" role="dialog" aria-modal="true" aria-labelledby="fixedCostModalTitle">
+      <div class="modal-handle"></div>
+      <div class="modal-header"><h2 id="fixedCostModalTitle">固定費を追加</h2><button class="icon-close pop-button" data-close-modal="fixedCostModal" type="button">×</button></div>
+      <form id="fixedCostForm"><label class="full-field"><span>名前</span><input id="fixedCostName" maxlength="30" placeholder="スマホ、家賃など" required /></label><label class="full-field"><span>金額</span><div class="inline-money"><span>¥</span><input id="fixedCostAmount" inputmode="numeric" maxlength="12" required /></div></label><button class="primary-button pop-button" type="submit">追加する</button></form>
     </section>
   </div>
 
   <div class="modal-backdrop" id="confirmModal" aria-hidden="true">
-    <section class="modal-card pop-modal small-modal confirm-card" role="dialog" aria-modal="true" aria-labelledby="confirmTitle">
-      <div class="confirm-icon">!</div>
-      <h2 id="confirmTitle">確認</h2>
-      <p id="confirmMessage">削除してもよろしいですか？</p>
-      <div class="confirm-actions">
-        <button class="secondary-button bounce-button" id="confirmCancelBtn" type="button">やめる</button>
-        <button class="danger-button bounce-button" id="confirmOkBtn" type="button">削除する</button>
-      </div>
-    </section>
+    <section class="modal-sheet confirm-sheet" role="dialog" aria-modal="true"><div class="confirm-icon">!</div><h2 id="confirmTitle">確認</h2><p id="confirmMessage"></p><div class="confirm-actions"><button class="secondary-button pop-button" id="confirmCancelBtn" type="button">キャンセル</button><button class="danger-button pop-button" id="confirmOkBtn" type="button">削除する</button></div></section>
   </div>
 
   <div class="toast" id="toast" role="status" aria-live="polite"></div>
-
-  <script src="./script.js"></script>
+  <script src="./script.js?v=1.1" defer></script>
 </body>
 </html>

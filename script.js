@@ -1,651 +1,293 @@
-(() => {
-  'use strict';
+'use strict';
 
-  const VERSION = 'v1.0';
-  const DB_NAME = 'kotsukotsu-kakeibo-db';
-  const DB_VERSION = 1;
-  const STORE_NAME = 'app';
-  const STATE_KEY = 'state';
+const DB_NAME = 'kotsukotsu-kakeibo';
+const DB_VERSION = 1;
+const STORE_NAME = 'app';
+const STATE_KEY = 'state';
+const APP_VERSION = '1.1';
 
-  const DEFAULT_STATE = {
-    version: VERSION,
-    budget: 80000,
-    savings: { balance: 0, goal: 1500000 },
-    fixedCosts: [],
-    transactions: []
-  };
+const DEFAULT_STATE = {
+  budget: 80000,
+  transactions: [],
+  fixedCosts: [],
+  savings: { balance: 0, goal: 1500000 }
+};
 
-  const CATEGORIES = [
-    { id: 'food', name: '食費', icon: iconBowl() },
-    { id: 'daily', name: '日用品', icon: iconBottle() },
-    { id: 'hobby', name: '趣味', icon: iconGame() },
-    { id: 'creative', name: '創作', icon: iconPen() },
-    { id: 'beauty', name: '衣類・美容', icon: iconRibbon() },
-    { id: 'transport', name: '交通', icon: iconTrain() },
-    { id: 'medical', name: '医療', icon: iconCross() },
-    { id: 'fixed', name: '固定費', icon: iconHouse() },
-    { id: 'subscription', name: 'サブスク', icon: iconLoop() },
-    { id: 'other', name: 'その他', icon: iconDots() },
-    { id: 'salary', name: '給料', icon: iconWallet(), incomeOnly: true },
-    { id: 'refund', name: '返金', icon: iconReturn(), incomeOnly: true }
-  ];
+const icon = (body, bg = '#fff3bf') => `
+<svg viewBox="0 0 48 48" aria-hidden="true" xmlns="http://www.w3.org/2000/svg">
+  <rect x="2" y="2" width="44" height="44" rx="12" fill="${bg}"/>
+  ${body}
+</svg>`;
 
-  const dom = {};
-  let state = structuredClone(DEFAULT_STATE);
-  let db = null;
-  let activeTransactionType = 'expense';
-  let selectedCategoryId = 'food';
-  let historyCursor = startOfMonth(new Date());
-  let pendingConfirmAction = null;
-  let toastTimer = null;
+const CATEGORIES = [
+  { id:'food', name:'食費', icon:icon('<path d="M13 25h22v3a9 9 0 0 1-9 9h-4a9 9 0 0 1-9-9v-3Z" fill="#fff" stroke="#604c39" stroke-width="2"/><path d="M17 22c1-5 3-8 7-10M24 22c0-5 1-8 4-11M30 22c0-4 2-6 5-8" fill="none" stroke="#604c39" stroke-width="2" stroke-linecap="round"/>') },
+  { id:'daily', name:'日用品', icon:icon('<rect x="13" y="17" width="22" height="20" rx="5" fill="#fff" stroke="#604c39" stroke-width="2"/><path d="M18 17v-3h12v3M18 24h12M18 29h8" fill="none" stroke="#604c39" stroke-width="2" stroke-linecap="round"/>','#f8edc9') },
+  { id:'transport', name:'交通', icon:icon('<rect x="12" y="12" width="24" height="24" rx="6" fill="#fff" stroke="#604c39" stroke-width="2"/><path d="M16 18h16v9H16zM18 34v2M30 34v2" fill="none" stroke="#604c39" stroke-width="2"/><circle cx="19" cy="30" r="2" fill="#604c39"/><circle cx="29" cy="30" r="2" fill="#604c39"/>','#eef2de') },
+  { id:'beauty', name:'衣類・美容', icon:icon('<path d="M18 14h12l5 6-5 4v13H18V24l-5-4 5-6Z" fill="#fff" stroke="#604c39" stroke-width="2" stroke-linejoin="round"/><path d="M21 14c0 4 6 4 6 0" fill="none" stroke="#604c39" stroke-width="2"/>','#fbe8df') },
+  { id:'medical', name:'医療', icon:icon('<rect x="13" y="13" width="22" height="22" rx="7" fill="#fff" stroke="#604c39" stroke-width="2"/><path d="M24 18v12M18 24h12" stroke="#b86d60" stroke-width="3" stroke-linecap="round"/>','#f8e7e3') },
+  { id:'hobby', name:'趣味', icon:icon('<path d="M24 36s-12-7-12-15a7 7 0 0 1 12-5 7 7 0 0 1 12 5c0 8-12 15-12 15Z" fill="#fff" stroke="#604c39" stroke-width="2"/>','#f3e5f2') },
+  { id:'game', name:'ゲーム', icon:icon('<path d="M16 20h16a7 7 0 0 1 6 9l-2 6a4 4 0 0 1-6 2l-4-3h-4l-4 3a4 4 0 0 1-6-2l-2-6a7 7 0 0 1 6-9Z" fill="#fff" stroke="#604c39" stroke-width="2"/><path d="M18 27h6M21 24v6" stroke="#604c39" stroke-width="2" stroke-linecap="round"/><circle cx="30" cy="26" r="1.5" fill="#604c39"/><circle cx="33" cy="30" r="1.5" fill="#604c39"/>','#e9edf8') },
+  { id:'creative', name:'創作', icon:icon('<path d="m14 34 5-14 10-8 7 7-8 10-14 5Z" fill="#fff" stroke="#604c39" stroke-width="2" stroke-linejoin="round"/><path d="m19 20 9 9M29 12l7 7" stroke="#604c39" stroke-width="2"/><circle cx="18" cy="30" r="2" fill="#604c39"/>','#e6f3ef') },
+  { id:'subscription', name:'サブスク', icon:icon('<rect x="12" y="15" width="24" height="19" rx="5" fill="#fff" stroke="#604c39" stroke-width="2"/><path d="M17 20h14M18 27h5M27 27h3" stroke="#604c39" stroke-width="2" stroke-linecap="round"/>','#f3eadb') },
+  { id:'fixed', name:'固定費', icon:icon('<path d="M11 23 24 12l13 11v14H11V23Z" fill="#fff" stroke="#604c39" stroke-width="2" stroke-linejoin="round"/><path d="M20 37V27h8v10" fill="none" stroke="#604c39" stroke-width="2"/>','#f7ecc5') },
+  { id:'gift', name:'交際・贈り物', icon:icon('<rect x="12" y="21" width="24" height="16" rx="3" fill="#fff" stroke="#604c39" stroke-width="2"/><path d="M24 21v16M10 21h28v-6H10v6ZM24 15c-5 0-7-2-6-5 3-1 6 1 6 5Zm0 0c5 0 7-2 6-5-3-1-6 1-6 5Z" fill="#fff" stroke="#604c39" stroke-width="2" stroke-linejoin="round"/>','#f9e7e1') },
+  { id:'other', name:'その他', icon:icon('<circle cx="16" cy="24" r="3" fill="#604c39"/><circle cx="24" cy="24" r="3" fill="#604c39"/><circle cx="32" cy="24" r="3" fill="#604c39"/>','#eee9df') },
+  { id:'salary', name:'給料', incomeOnly:true, icon:icon('<rect x="11" y="15" width="26" height="19" rx="4" fill="#fff" stroke="#604c39" stroke-width="2"/><circle cx="24" cy="24.5" r="5" fill="none" stroke="#668b74" stroke-width="2"/><path d="M14 19h4M30 30h4" stroke="#604c39" stroke-width="2" stroke-linecap="round"/>','#e5f1e7') },
+  { id:'sideincome', name:'臨時収入', incomeOnly:true, icon:icon('<path d="M24 10 28 20l10 4-10 4-4 10-4-10-10-4 10-4 4-10Z" fill="#fff" stroke="#604c39" stroke-width="2" stroke-linejoin="round"/>','#edf5df') },
+  { id:'refund', name:'返金', incomeOnly:true, icon:icon('<path d="M15 18h18v17H15z" fill="#fff" stroke="#604c39" stroke-width="2"/><path d="M18 14h12M19 22h10M24 19v12M19 27h10" fill="none" stroke="#604c39" stroke-width="2" stroke-linecap="round"/>','#e5f1e7') },
+  { id:'otherincome', name:'その他収入', incomeOnly:true, icon:icon('<circle cx="16" cy="24" r="3" fill="#668b74"/><circle cx="24" cy="24" r="3" fill="#668b74"/><circle cx="32" cy="24" r="3" fill="#668b74"/>','#e8f2ea') }
+];
 
-  document.addEventListener('DOMContentLoaded', init);
+let state = structuredCloneSafe(DEFAULT_STATE);
+let db = null;
+let activePage = 'home';
+let previousPage = 'home';
+let activeTransactionType = 'expense';
+let selectedCategoryId = 'food';
+let historyCursor = startOfMonth(new Date());
+let selectedCalendarDate = todayIso();
+let confirmAction = null;
+let toastTimer = null;
 
-  async function init() {
-    cacheDom();
-    setTodayDefaults();
-    bindGlobalZoomGuards();
-    bindNavigation();
-    bindModals();
-    bindForms();
-    bindDataActions();
-    renderCategoryPicker();
-    registerServiceWorker();
+const $ = id => document.getElementById(id);
+const dom = {};
 
-    try {
-      db = await openDatabase();
-      const saved = await dbGet(STATE_KEY);
-      if (saved && typeof saved === 'object') state = normalizeState(saved);
-      else await persistState();
-    } catch (error) {
-      console.warn('IndexedDB unavailable. Falling back to localStorage.', error);
-      const fallback = safeParse(localStorage.getItem('kotsukotsu-kakeibo-state'));
-      if (fallback) state = normalizeState(fallback);
-    }
+window.addEventListener('DOMContentLoaded', init);
 
-    historyCursor = startOfMonth(new Date());
-    renderAll();
+async function init(){
+  cacheDom();
+  preventZoomGestures();
+  bindEvents();
+  await initStorage();
+  const loaded = await loadState();
+  state = normalizeState(loaded || DEFAULT_STATE);
+  $('transactionDate').value = todayIso();
+  renderCategoryPicker();
+  renderAll();
+  registerServiceWorker();
+}
+
+function cacheDom(){
+  document.querySelectorAll('[id]').forEach(el => { dom[el.id] = el; });
+}
+
+function bindEvents(){
+  document.querySelectorAll('[data-page-target]').forEach(btn => btn.addEventListener('click', () => switchPage(btn.dataset.pageTarget)));
+  document.querySelectorAll('[data-go-page]').forEach(btn => btn.addEventListener('click', () => switchPage(btn.dataset.goPage)));
+  dom.openSettingsBtn.addEventListener('click', () => { previousPage = activePage === 'settings' ? 'home' : activePage; switchPage('settings'); });
+  dom.closeSettingsPageBtn.addEventListener('click', () => switchPage(previousPage || 'home'));
+  dom.openTransactionBtn.addEventListener('click', openTransactionModal);
+  dom.editBudgetFromHome.addEventListener('click', () => switchPage('budget'));
+  dom.prevHistoryMonth.addEventListener('click', () => moveHistoryMonth(-1));
+  dom.nextHistoryMonth.addEventListener('click', () => moveHistoryMonth(1));
+  dom.jumpTodayBtn.addEventListener('click', () => { historyCursor = startOfMonth(new Date()); selectedCalendarDate = todayIso(); renderHistory(); });
+  dom.addFixedCostBtn.addEventListener('click', () => openModal('fixedCostModal'));
+
+  document.querySelectorAll('[data-close-modal]').forEach(btn => btn.addEventListener('click', () => closeModal(btn.dataset.closeModal)));
+  document.querySelectorAll('.modal-backdrop').forEach(backdrop => backdrop.addEventListener('click', e => { if(e.target === backdrop && backdrop.id !== 'confirmModal') closeModal(backdrop.id); }));
+
+  dom.transactionTypeControl.addEventListener('click', e => {
+    const btn = e.target.closest('[data-type]'); if(!btn) return;
+    activeTransactionType = btn.dataset.type;
+    selectedCategoryId = activeTransactionType === 'expense' ? 'food' : 'salary';
+    dom.transactionTypeControl.querySelectorAll('[data-type]').forEach(b => b.classList.toggle('is-active', b === btn));
+    renderCategoryPicker(); pop(btn);
+  });
+  dom.categoryPicker.addEventListener('click', e => {
+    const btn = e.target.closest('[data-category-id]'); if(!btn) return;
+    selectedCategoryId = btn.dataset.categoryId;
+    dom.categoryPicker.querySelectorAll('[data-category-id]').forEach(b => b.classList.toggle('is-selected', b === btn)); pop(btn);
+  });
+  document.querySelector('.quick-amounts').addEventListener('click', e => {
+    const btn = e.target.closest('[data-add-amount]'); if(!btn) return;
+    dom.transactionAmount.value = formatInputMoney(parseMoney(dom.transactionAmount.value) + Number(btn.dataset.addAmount)); pop(btn);
+  });
+
+  [dom.transactionAmount, dom.fixedCostAmount, dom.budgetInput, dom.savingsBalanceInput, dom.savingsGoalInput].forEach(el => el.addEventListener('input', moneyFieldFormatter));
+  dom.transactionForm.addEventListener('submit', saveTransaction);
+  dom.saveBudgetBtn.addEventListener('click', saveBudget);
+  dom.fixedCostForm.addEventListener('submit', saveFixedCost);
+  dom.saveSavingsBtn.addEventListener('click', saveSavings);
+  dom.calendarGrid.addEventListener('click', e => {
+    const cell = e.target.closest('[data-date]'); if(!cell) return;
+    selectedCalendarDate = cell.dataset.date;
+    const d = parseLocalDate(selectedCalendarDate);
+    if(d.getMonth() !== historyCursor.getMonth() || d.getFullYear() !== historyCursor.getFullYear()) historyCursor = startOfMonth(d);
+    renderHistory(); pop(cell);
+  });
+  document.addEventListener('click', e => {
+    const txDelete = e.target.closest('[data-delete-transaction]');
+    if(txDelete){ askConfirm('この記録を削除する？','削除すると元には戻せません。', async () => { state.transactions = state.transactions.filter(t => t.id !== txDelete.dataset.deleteTransaction); await persistState(); renderAll(); showToast('記録を削除したよ'); }); return; }
+    const fixedDelete = e.target.closest('[data-delete-fixed]');
+    if(fixedDelete){ askConfirm('この固定費を削除する？','固定費一覧から削除します。', async () => { state.fixedCosts = state.fixedCosts.filter(x => x.id !== fixedDelete.dataset.deleteFixed); await persistState(); renderBudgetPage(); showToast('固定費を削除したよ'); }); }
+  });
+  dom.confirmCancelBtn.addEventListener('click', () => { confirmAction = null; closeModal('confirmModal'); });
+  dom.confirmOkBtn.addEventListener('click', async () => { const fn = confirmAction; confirmAction = null; closeModal('confirmModal'); if(fn) await fn(); });
+  dom.exportJsonBtn.addEventListener('click', exportJson);
+  dom.importJsonInput.addEventListener('change', importJson);
+  dom.resetDataBtn.addEventListener('click', () => askConfirm('全部初期化する？','支出・収入・予算・固定費・貯金のデータをこの端末から削除します。', resetAllData));
+  document.addEventListener('keydown', e => { if(e.key === 'Escape'){ const open = [...document.querySelectorAll('.modal-backdrop.is-open')].pop(); if(open && open.id !== 'confirmModal') closeModal(open.id); } });
+}
+
+function preventZoomGestures(){
+  let lastTouchEnd = 0;
+  document.addEventListener('touchend', e => { const now = Date.now(); if(now-lastTouchEnd <= 300) e.preventDefault(); lastTouchEnd = now; }, {passive:false});
+  ['gesturestart','gesturechange','gestureend'].forEach(name => document.addEventListener(name, e => e.preventDefault(), {passive:false}));
+  document.addEventListener('wheel', e => { if(e.ctrlKey || e.metaKey) e.preventDefault(); }, {passive:false});
+}
+
+function switchPage(page){
+  if(!document.querySelector(`[data-page="${page}"]`)) return;
+  activePage = page;
+  document.querySelectorAll('.page').forEach(p => p.classList.toggle('is-active', p.dataset.page === page));
+  document.querySelectorAll('[data-page-target]').forEach(b => b.classList.toggle('is-active', b.dataset.pageTarget === page));
+  dom.openSettingsBtn.style.display = page === 'settings' ? 'none' : 'grid';
+  window.scrollTo({top:0,behavior:'auto'});
+  if(page === 'history') renderHistory();
+  if(page === 'budget') renderBudgetPage();
+  if(page === 'savings') renderSavings();
+}
+
+function openTransactionModal(){
+  activeTransactionType = 'expense'; selectedCategoryId = 'food';
+  dom.transactionTypeControl.querySelectorAll('[data-type]').forEach(b => b.classList.toggle('is-active', b.dataset.type === 'expense'));
+  dom.transactionDate.value = selectedCalendarDate && activePage === 'history' ? selectedCalendarDate : todayIso();
+  dom.transactionAmount.value = ''; dom.transactionMemo.value = ''; dom.paymentMethod.value = '現金';
+  renderCategoryPicker(); openModal('transactionModal');
+  setTimeout(() => dom.transactionAmount.focus({preventScroll:true}),220);
+}
+
+function renderCategoryPicker(){
+  const items = CATEGORIES.filter(c => activeTransactionType === 'income' ? c.incomeOnly : !c.incomeOnly);
+  if(!items.some(c => c.id === selectedCategoryId)) selectedCategoryId = items[0]?.id || 'other';
+  dom.categoryPicker.innerHTML = items.map(c => `<button class="category-choice pop-button ${c.id===selectedCategoryId?'is-selected':''}" type="button" data-category-id="${c.id}">${c.icon}<span>${escapeHtml(c.name)}</span></button>`).join('');
+}
+
+async function saveTransaction(e){
+  e.preventDefault();
+  const amount = parseMoney(dom.transactionAmount.value);
+  if(amount <= 0) return showToast('金額を入力してね');
+  const item = { id:uid(), type:activeTransactionType, amount, categoryId:selectedCategoryId, date:dom.transactionDate.value || todayIso(), payment:dom.paymentMethod.value, memo:dom.transactionMemo.value.trim(), createdAt:new Date().toISOString() };
+  state.transactions.push(item);
+  await persistState();
+  selectedCalendarDate = item.date;
+  closeModal('transactionModal'); renderAll();
+  showToast(item.type === 'expense' ? '支出を登録したよ' : '収入を登録したよ');
+}
+
+async function saveBudget(){
+  state.budget = Math.max(0, parseMoney(dom.budgetInput.value)); await persistState(); renderAll(); showToast('予算を保存したよ');
+}
+async function saveFixedCost(e){
+  e.preventDefault(); const name = dom.fixedCostName.value.trim(); const amount = parseMoney(dom.fixedCostAmount.value);
+  if(!name || amount<=0) return showToast('名前と金額を入力してね');
+  state.fixedCosts.push({id:uid(),name,amount}); await persistState(); dom.fixedCostForm.reset(); closeModal('fixedCostModal'); renderBudgetPage(); showToast('固定費を追加したよ');
+}
+async function saveSavings(){
+  state.savings.balance = Math.max(0,parseMoney(dom.savingsBalanceInput.value)); state.savings.goal = Math.max(0,parseMoney(dom.savingsGoalInput.value)); await persistState(); renderHome(); renderSavings(); showToast('貯金情報を保存したよ');
+}
+
+function moveHistoryMonth(delta){
+  historyCursor = new Date(historyCursor.getFullYear(),historyCursor.getMonth()+delta,1);
+  const today = new Date();
+  selectedCalendarDate = historyCursor.getFullYear()===today.getFullYear() && historyCursor.getMonth()===today.getMonth() ? todayIso() : localIso(new Date(historyCursor.getFullYear(),historyCursor.getMonth(),1));
+  renderHistory();
+}
+
+function renderAll(){ renderHome(); renderHistory(); renderBudgetPage(); renderSavings(); }
+
+function renderHome(){
+  const now = new Date();
+  const monthItems = transactionsForMonth(now);
+  const expenses = monthItems.filter(t=>t.type==='expense'); const incomes = monthItems.filter(t=>t.type==='income');
+  const spent = sum(expenses.map(t=>t.amount)); const income = sum(incomes.map(t=>t.amount)); const budget = Math.max(0,state.budget||0); const remaining = budget-spent; const usedRatio = budget>0 ? Math.min(spent/budget,1) : 0;
+  const daysInMonth = new Date(now.getFullYear(),now.getMonth()+1,0).getDate(); const remainingDays = Math.max(1,daysInMonth-now.getDate()+1); const daily = Math.max(0,remaining)/remainingDays;
+  dom.monthLabel.textContent = `${now.getFullYear()}年${now.getMonth()+1}月`;
+  dom.budgetAmount.textContent = yen(budget); dom.spentAmount.textContent = yen(spent); dom.remainingAmount.textContent = signedRemaining(remaining); dom.remainingPercent.textContent = budget>0 ? `${Math.max(0,Math.round((remaining/budget)*100))}%` : '—'; dom.dailyAllowance.textContent = yen(Math.floor(daily)); dom.incomeAmount.textContent = yen(income); dom.balanceAmount.textContent = signedYen(income-spent); dom.budgetDonut.style.setProperty('--progress',`${usedRatio*360}deg`);
+  renderTransactionList(dom.todayTransactionList,state.transactions.filter(t=>t.date===todayIso()).sort(sortNewest),true);
+  const totals={}; expenses.forEach(t=>totals[t.categoryId]=(totals[t.categoryId]||0)+t.amount); const entries=Object.entries(totals).sort((a,b)=>b[1]-a[1]).slice(0,6);
+  if(!entries.length) dom.categorySummary.innerHTML='<div class="empty-state">まだ支出がないよ。＋から記録してみてね。</div>';
+  else { const max=Math.max(...entries.map(([,v])=>v),1); dom.categorySummary.innerHTML=entries.map(([id,v])=>`<div class="category-summary-row"><span class="name">${escapeHtml(getCategory(id)?.name||'その他')}</span><div class="category-bar"><span style="width:${Math.max(8,v/max*100)}%"></span></div><strong>${yen(v)}</strong></div>`).join(''); }
+  const goal=Math.max(0,state.savings.goal||0), balance=Math.max(0,state.savings.balance||0), ratio=goal>0?Math.min(balance/goal,1):0; dom.homeSavingsBalance.textContent=yen(balance); dom.homeSavingsCaption.textContent=goal>0?`目標 ${yen(goal)}`:'目標未設定'; dom.homeSavingsProgress.style.width=`${ratio*100}%`;
+}
+
+function renderHistory(){
+  dom.historyMonthLabel.textContent = `${historyCursor.getFullYear()}年${historyCursor.getMonth()+1}月`;
+  renderCalendarGrid(); renderSelectedDate();
+}
+
+function renderCalendarGrid(){
+  const year=historyCursor.getFullYear(), month=historyCursor.getMonth(); const first=new Date(year,month,1); const start=new Date(year,month,1-first.getDay()); const cells=[];
+  for(let i=0;i<42;i++){
+    const d=new Date(start.getFullYear(),start.getMonth(),start.getDate()+i); const date=localIso(d); const dayItems=state.transactions.filter(t=>t.date===date); const expense=sum(dayItems.filter(t=>t.type==='expense').map(t=>t.amount)); const income=sum(dayItems.filter(t=>t.type==='income').map(t=>t.amount)); const outside=d.getMonth()!==month; const isToday=date===todayIso(); const isSelected=date===selectedCalendarDate;
+    cells.push(`<button class="calendar-day pop-button ${outside?'outside':''} ${isToday?'is-today':''} ${isSelected?'is-selected':''}" type="button" data-date="${date}" aria-label="${d.getMonth()+1}月${d.getDate()}日"><span class="day-num">${d.getDate()}</span><span class="calendar-day-money">${expense?`<span class="expense">−${compactYen(expense)}</span>`:''}${income?`<span class="income">＋${compactYen(income)}</span>`:''}</span></button>`);
   }
+  dom.calendarGrid.innerHTML=cells.join('');
+}
 
-  function registerServiceWorker() {
-    if (!('serviceWorker' in navigator)) return;
+function renderSelectedDate(){
+  const d=parseLocalDate(selectedCalendarDate); const items=state.transactions.filter(t=>t.date===selectedCalendarDate).sort(sortNewest); const expense=sum(items.filter(t=>t.type==='expense').map(t=>t.amount)); const income=sum(items.filter(t=>t.type==='income').map(t=>t.amount));
+  const todayTag=selectedCalendarDate===todayIso()?'・今日':''; dom.selectedDateLabel.textContent=`${d.getMonth()+1}月${d.getDate()}日${todayTag}`; dom.selectedExpenseTotal.textContent=yen(expense); dom.selectedIncomeTotal.textContent=yen(income); renderTransactionList(dom.selectedDateTransactionList,items,false);
+}
 
-    window.addEventListener('load', () => {
-      navigator.serviceWorker.register('./service-worker.js', { scope: './' })
-        .then(registration => {
-          registration.update().catch(() => {});
-        })
-        .catch(error => {
-          console.warn('Service Worker registration failed.', error);
-        });
-    }, { once: true });
-  }
+function renderBudgetPage(){
+  dom.budgetInput.value=formatInputMoney(state.budget||0); const total=sum(state.fixedCosts.map(x=>x.amount)); dom.fixedCostTotal.textContent=yen(total);
+  dom.fixedCostList.innerHTML = state.fixedCosts.length ? state.fixedCosts.map(x=>`<div class="fixed-cost-row"><div><strong>${escapeHtml(x.name)}</strong><small>毎月</small></div><div><strong>${yen(x.amount)}</strong><button type="button" data-delete-fixed="${x.id}" aria-label="削除">×</button></div></div>`).join('') : '<div class="empty-state">固定費はまだ登録されていないよ。</div>';
+}
 
-  function cacheDom() {
-    [
-      'mainContent','monthLabel','budgetDonut','remainingAmount','remainingPercent','budgetAmount','spentAmount','dailyAllowance','incomeAmount','balanceAmount','todayTransactionList','categorySummary','homeSavingsBalance','homeSavingsProgress','homeSavingsCaption','historyMonthLabel','historyExpenseTotal','historyIncomeTotal','historyTransactionList','budgetInput','saveBudgetBtn','fixedCostList','fixedCostTotal','savingsBalanceDisplay','savingsGoalDisplay','savingsRemainingDisplay','savingsDonut','savingsPercent','savingsBalanceInput','savingsGoalInput','transactionModal','transactionForm','transactionAmount','transactionDate','paymentMethod','transactionMemo','transactionTypeControl','categoryPicker','fixedCostModal','fixedCostForm','fixedCostName','fixedCostAmount','confirmModal','confirmTitle','confirmMessage','confirmCancelBtn','confirmOkBtn','toast','importJsonInput'
-    ].forEach(id => dom[id] = document.getElementById(id));
-  }
+function renderSavings(){
+  const balance=Math.max(0,state.savings.balance||0),goal=Math.max(0,state.savings.goal||0),ratio=goal>0?Math.min(balance/goal,1):0; dom.savingsBalanceDisplay.textContent=yen(balance); dom.savingsGoalDisplay.textContent=yen(goal); dom.savingsRemainingDisplay.textContent=`あと ${yen(Math.max(0,goal-balance))}`; dom.savingsPercent.textContent=goal>0?`${Math.round(ratio*100)}%`:'—'; dom.savingsDonut.style.setProperty('--progress',`${ratio*360}deg`); dom.savingsBalanceInput.value=formatInputMoney(balance); dom.savingsGoalInput.value=formatInputMoney(goal);
+}
 
-  function bindNavigation() {
-    document.querySelectorAll('[data-page-target]').forEach(btn => {
-      btn.addEventListener('click', () => switchPage(btn.dataset.pageTarget));
-    });
-    document.querySelectorAll('[data-go-page]').forEach(btn => {
-      btn.addEventListener('click', () => switchPage(btn.dataset.goPage));
-    });
-    document.getElementById('openSettingsBtn').addEventListener('click', () => switchPage('settings'));
-    document.getElementById('openTransactionBtn').addEventListener('click', () => openTransactionModal());
-    document.getElementById('editBudgetFromHome').addEventListener('click', () => switchPage('budget'));
-    document.getElementById('addFixedCostBtn').addEventListener('click', () => openModal('fixedCostModal'));
-    document.getElementById('prevHistoryMonth').addEventListener('click', () => {
-      historyCursor = new Date(historyCursor.getFullYear(), historyCursor.getMonth() - 1, 1);
-      renderHistory();
-    });
-    document.getElementById('nextHistoryMonth').addEventListener('click', () => {
-      historyCursor = new Date(historyCursor.getFullYear(), historyCursor.getMonth() + 1, 1);
-      renderHistory();
-    });
-  }
+function renderTransactionList(container,items,compact){
+  if(!items.length){ container.innerHTML=`<div class="empty-state">${compact?'今日はまだ記録がないよ。':'この日の記録はまだないよ。'}</div>`; return; }
+  container.innerHTML=items.map(item=>{ const c=getCategory(item.categoryId); const memo=item.memo||c?.name||'記録'; const sub=[c?.name,item.payment,item.date].filter(Boolean).join(' ・ '); return `<div class="transaction-row"><div class="tx-icon">${c?.icon||getCategory('other').icon}</div><div class="tx-main"><strong>${escapeHtml(memo)}</strong><small>${escapeHtml(sub)}</small></div><strong class="tx-amount ${item.type}">${item.type==='income'?'+':'−'}${yen(item.amount)}</strong><button class="tx-delete pop-button" type="button" data-delete-transaction="${item.id}" aria-label="削除">×</button></div>`; }).join('');
+}
 
-  function switchPage(pageName) {
-    document.querySelectorAll('.page').forEach(page => page.classList.toggle('is-active', page.dataset.page === pageName));
-    document.querySelectorAll('.nav-button[data-page-target]').forEach(btn => btn.classList.toggle('is-active', btn.dataset.pageTarget === pageName));
-    dom.mainContent.scrollTop = 0;
-    if (pageName === 'history') renderHistory();
-    if (pageName === 'budget') renderBudgetPage();
-    if (pageName === 'savings') renderSavings();
-  }
+function openModal(id){ const el=dom[id]||$(id); if(!el)return; el.classList.add('is-open'); el.setAttribute('aria-hidden','false'); document.body.style.overflow='hidden'; }
+function closeModal(id){ const el=dom[id]||$(id); if(!el)return; el.classList.remove('is-open'); el.setAttribute('aria-hidden','true'); if(!document.querySelector('.modal-backdrop.is-open')) document.body.style.overflow=''; }
+function askConfirm(title,message,action){ dom.confirmTitle.textContent=title; dom.confirmMessage.textContent=message; confirmAction=action; openModal('confirmModal'); }
+function pop(el){ el.classList.remove('is-popping'); void el.offsetWidth; el.classList.add('is-popping'); setTimeout(()=>el.classList.remove('is-popping'),360); }
+function showToast(message){ clearTimeout(toastTimer); dom.toast.textContent=message; dom.toast.classList.add('is-show'); toastTimer=setTimeout(()=>dom.toast.classList.remove('is-show'),1900); }
 
-  function bindModals() {
-    document.querySelectorAll('[data-close-modal]').forEach(btn => btn.addEventListener('click', () => closeModal(btn.dataset.closeModal)));
-    document.querySelectorAll('.modal-backdrop').forEach(backdrop => {
-      backdrop.addEventListener('click', event => {
-        if (event.target === backdrop && backdrop.id !== 'confirmModal') closeModal(backdrop.id);
-      });
-    });
-    document.addEventListener('keydown', event => {
-      if (event.key === 'Escape') {
-        const open = document.querySelector('.modal-backdrop.is-open');
-        if (open && open.id !== 'confirmModal') closeModal(open.id);
-      }
-    });
+async function exportJson(){
+  const payload={app:'kotsukotsu-kakeibo',version:APP_VERSION,exportedAt:new Date().toISOString(),data:state}; const blob=new Blob([JSON.stringify(payload,null,2)],{type:'application/json'}); const url=URL.createObjectURL(blob); const a=document.createElement('a'); a.href=url; a.download=`kakeibo-backup-${todayIso()}.json`; document.body.appendChild(a); a.click(); a.remove(); setTimeout(()=>URL.revokeObjectURL(url),500); showToast('JSONを書き出したよ');
+}
+async function importJson(e){
+  const file=e.target.files?.[0]; if(!file)return; try{ const parsed=JSON.parse(await file.text()); const candidate=parsed.data||parsed; state=normalizeState(candidate); await persistState(); renderAll(); showToast('バックアップを読み込んだよ'); }catch(err){ console.error(err); showToast('JSONを読み込めなかったよ'); }finally{ e.target.value=''; }
+}
+async function resetAllData(){ state=structuredCloneSafe(DEFAULT_STATE); await persistState(); historyCursor=startOfMonth(new Date()); selectedCalendarDate=todayIso(); renderAll(); switchPage('home'); showToast('データを初期化したよ'); }
 
-    dom.confirmCancelBtn.addEventListener('click', closeConfirm);
-    dom.confirmOkBtn.addEventListener('click', async () => {
-      const action = pendingConfirmAction;
-      closeConfirm();
-      if (action) await action();
-    });
-  }
+function initStorage(){
+  return new Promise(resolve=>{ if(!('indexedDB' in window)){ resolve(); return; } const req=indexedDB.open(DB_NAME,DB_VERSION); req.onupgradeneeded=()=>{ const d=req.result; if(!d.objectStoreNames.contains(STORE_NAME)) d.createObjectStore(STORE_NAME); }; req.onsuccess=()=>{ db=req.result; resolve(); }; req.onerror=()=>{ console.warn('IndexedDB unavailable',req.error); resolve(); }; });
+}
+async function loadState(){
+  if(db){ try{return await idbGet(STATE_KEY);}catch(e){console.warn(e);} }
+  try{ return JSON.parse(localStorage.getItem('kotsukotsu-kakeibo-state')||'null'); }catch{return null;}
+}
+async function persistState(){
+  const data=structuredCloneSafe(state); if(db){ try{ await idbPut(STATE_KEY,data); return; }catch(e){console.warn(e);} } localStorage.setItem('kotsukotsu-kakeibo-state',JSON.stringify(data));
+}
+function idbGet(key){ return new Promise((resolve,reject)=>{ const tx=db.transaction(STORE_NAME,'readonly'); const req=tx.objectStore(STORE_NAME).get(key); req.onsuccess=()=>resolve(req.result); req.onerror=()=>reject(req.error); }); }
+function idbPut(key,value){ return new Promise((resolve,reject)=>{ const tx=db.transaction(STORE_NAME,'readwrite'); tx.objectStore(STORE_NAME).put(value,key); tx.oncomplete=()=>resolve(); tx.onerror=()=>reject(tx.error); }); }
 
-  function openModal(id) {
-    const modal = document.getElementById(id);
-    if (!modal) return;
-    modal.classList.add('is-open');
-    modal.setAttribute('aria-hidden', 'false');
-  }
-
-  function closeModal(id) {
-    const modal = document.getElementById(id);
-    if (!modal) return;
-    modal.classList.remove('is-open');
-    modal.setAttribute('aria-hidden', 'true');
-  }
-
-  function showConfirm(title, message, action, okLabel = '削除する') {
-    dom.confirmTitle.textContent = title;
-    dom.confirmMessage.textContent = message;
-    dom.confirmOkBtn.textContent = okLabel;
-    pendingConfirmAction = action;
-    openModal('confirmModal');
-  }
-
-  function closeConfirm() {
-    pendingConfirmAction = null;
-    closeModal('confirmModal');
-  }
-
-  function bindForms() {
-    dom.transactionTypeControl.addEventListener('click', event => {
-      const btn = event.target.closest('[data-type]');
-      if (!btn) return;
-      activeTransactionType = btn.dataset.type;
-      dom.transactionTypeControl.querySelectorAll('button').forEach(b => b.classList.toggle('is-active', b === btn));
-      selectedCategoryId = activeTransactionType === 'expense' ? 'food' : 'salary';
-      renderCategoryPicker();
-    });
-
-    document.getElementById('quickAmounts').addEventListener('click', event => {
-      const btn = event.target.closest('[data-add-amount]');
-      if (!btn) return;
-      const next = parseMoney(dom.transactionAmount.value) + Number(btn.dataset.addAmount);
-      dom.transactionAmount.value = formatInputMoney(next);
-      pulse(btn);
-    });
-
-    dom.transactionAmount.addEventListener('input', moneyFieldFormatter);
-    dom.fixedCostAmount.addEventListener('input', moneyFieldFormatter);
-    dom.budgetInput.addEventListener('input', moneyFieldFormatter);
-    dom.savingsBalanceInput.addEventListener('input', moneyFieldFormatter);
-    dom.savingsGoalInput.addEventListener('input', moneyFieldFormatter);
-
-    dom.transactionForm.addEventListener('submit', async event => {
-      event.preventDefault();
-      const amount = parseMoney(dom.transactionAmount.value);
-      if (!amount) return showToast('金額を入力してね');
-      const category = getCategory(selectedCategoryId);
-      const item = {
-        id: crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random().toString(16).slice(2)}`,
-        type: activeTransactionType,
-        amount,
-        categoryId: category?.id || (activeTransactionType === 'expense' ? 'other' : 'refund'),
-        date: dom.transactionDate.value || todayIso(),
-        payment: dom.paymentMethod.value,
-        memo: dom.transactionMemo.value.trim(),
-        createdAt: new Date().toISOString()
-      };
-      state.transactions.push(item);
-      await persistState();
-      closeModal('transactionModal');
-      resetTransactionForm();
-      renderAll();
-      showToast(activeTransactionType === 'expense' ? '支出を登録したよ' : '収入を登録したよ');
-    });
-
-    dom.saveBudgetBtn.addEventListener('click', async () => {
-      const value = parseMoney(dom.budgetInput.value);
-      if (value < 0) return;
-      state.budget = value;
-      await persistState();
-      renderAll();
-      showToast('月間予算を保存したよ');
-    });
-
-    dom.fixedCostForm.addEventListener('submit', async event => {
-      event.preventDefault();
-      const name = dom.fixedCostName.value.trim();
-      const amount = parseMoney(dom.fixedCostAmount.value);
-      if (!name || !amount) return showToast('名前と金額を入力してね');
-      state.fixedCosts.push({ id: crypto.randomUUID ? crypto.randomUUID() : String(Date.now()), name, amount });
-      await persistState();
-      dom.fixedCostForm.reset();
-      closeModal('fixedCostModal');
-      renderBudgetPage();
-      showToast('固定費を追加したよ');
-    });
-
-    dom.saveSavingsBtn.addEventListener('click', async () => {
-      state.savings.balance = parseMoney(dom.savingsBalanceInput.value);
-      state.savings.goal = Math.max(0, parseMoney(dom.savingsGoalInput.value));
-      await persistState();
-      renderSavings();
-      renderHome();
-      showToast('貯金情報を保存したよ');
-    });
-  }
-
-  function openTransactionModal() {
-    activeTransactionType = 'expense';
-    selectedCategoryId = 'food';
-    dom.transactionTypeControl.querySelectorAll('button').forEach(btn => btn.classList.toggle('is-active', btn.dataset.type === 'expense'));
-    dom.transactionDate.value = todayIso();
-    renderCategoryPicker();
-    openModal('transactionModal');
-    setTimeout(() => dom.transactionAmount.focus({ preventScroll: true }), 180);
-  }
-
-  function resetTransactionForm() {
-    dom.transactionForm.reset();
-    dom.transactionDate.value = todayIso();
-    activeTransactionType = 'expense';
-    selectedCategoryId = 'food';
-    renderCategoryPicker();
-  }
-
-  function renderCategoryPicker() {
-    const list = CATEGORIES.filter(category => activeTransactionType === 'income' ? category.incomeOnly : !category.incomeOnly);
-    if (!list.some(c => c.id === selectedCategoryId)) selectedCategoryId = list[0]?.id || 'other';
-    dom.categoryPicker.innerHTML = list.map(category => `
-      <button class="category-choice bounce-button ${category.id === selectedCategoryId ? 'is-selected' : ''}" type="button" data-category-id="${category.id}" aria-label="${escapeHtml(category.name)}">
-        ${category.icon}<span>${escapeHtml(category.name)}</span>
-      </button>`).join('');
-    dom.categoryPicker.querySelectorAll('[data-category-id]').forEach(btn => {
-      btn.addEventListener('click', () => {
-        selectedCategoryId = btn.dataset.categoryId;
-        dom.categoryPicker.querySelectorAll('.category-choice').forEach(b => b.classList.toggle('is-selected', b === btn));
-        pulse(btn);
-      });
-    });
-  }
-
-  function renderAll() {
-    renderHome();
-    renderHistory();
-    renderBudgetPage();
-    renderSavings();
-  }
-
-  function renderHome() {
-    const now = new Date();
-    const year = now.getFullYear();
-    const month = now.getMonth();
-    const monthTransactions = state.transactions.filter(t => isSameMonth(parseLocalDate(t.date), now));
-    const expenses = monthTransactions.filter(t => t.type === 'expense');
-    const incomes = monthTransactions.filter(t => t.type === 'income');
-    const spent = sum(expenses.map(t => t.amount));
-    const income = sum(incomes.map(t => t.amount));
-    const budget = Math.max(0, state.budget || 0);
-    const remaining = budget - spent;
-    const usedRatio = budget > 0 ? Math.min(spent / budget, 1) : 0;
-    const daysInMonth = new Date(year, month + 1, 0).getDate();
-    const remainingDays = Math.max(1, daysInMonth - now.getDate() + 1);
-    const daily = Math.max(0, remaining) / remainingDays;
-
-    dom.monthLabel.textContent = `${year}年${month + 1}月`;
-    dom.budgetAmount.textContent = yen(budget);
-    dom.spentAmount.textContent = yen(spent);
-    dom.remainingAmount.textContent = remaining >= 0 ? yen(remaining) : `-${yen(Math.abs(remaining))}`;
-    dom.remainingPercent.textContent = budget > 0 ? `${Math.max(0, Math.round((1 - usedRatio) * 100))}%` : '—';
-    dom.dailyAllowance.textContent = yen(Math.floor(daily));
-    dom.incomeAmount.textContent = yen(income);
-    dom.balanceAmount.textContent = signedYen(income - spent);
-    dom.budgetDonut.style.setProperty('--progress', `${usedRatio * 360}deg`);
-
-    const todays = state.transactions
-      .filter(t => t.date === todayIso())
-      .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
-    renderTransactionList(dom.todayTransactionList, todays, true);
-
-    const categoryTotals = expenses.reduce((acc, item) => {
-      acc[item.categoryId] = (acc[item.categoryId] || 0) + item.amount;
-      return acc;
-    }, {});
-    const entries = Object.entries(categoryTotals).sort((a, b) => b[1] - a[1]).slice(0, 6);
-    if (!entries.length) {
-      dom.categorySummary.innerHTML = '<div class="empty-state">まだ支出がないよ。＋から記録してみてね。</div>';
-    } else {
-      const max = Math.max(...entries.map(([,v]) => v), 1);
-      dom.categorySummary.innerHTML = entries.map(([id, value]) => {
-        const category = getCategory(id);
-        return `<div class="category-summary-row"><span class="name">${escapeHtml(category?.name || 'その他')}</span><div class="category-bar"><span style="width:${Math.max(8, value / max * 100)}%"></span></div><strong>${yen(value)}</strong></div>`;
-      }).join('');
-    }
-
-    const goal = Math.max(0, state.savings.goal || 0);
-    const balance = Math.max(0, state.savings.balance || 0);
-    const ratio = goal > 0 ? Math.min(balance / goal, 1) : 0;
-    dom.homeSavingsBalance.textContent = yen(balance);
-    dom.homeSavingsCaption.textContent = goal > 0 ? `目標 ${yen(goal)}` : '目標未設定';
-    dom.homeSavingsProgress.style.width = `${ratio * 100}%`;
-  }
-
-  function renderHistory() {
-    const monthTransactions = state.transactions
-      .filter(t => isSameMonth(parseLocalDate(t.date), historyCursor))
-      .sort((a, b) => b.date.localeCompare(a.date) || b.createdAt.localeCompare(a.createdAt));
-    const expense = sum(monthTransactions.filter(t => t.type === 'expense').map(t => t.amount));
-    const income = sum(monthTransactions.filter(t => t.type === 'income').map(t => t.amount));
-    dom.historyMonthLabel.textContent = `${historyCursor.getFullYear()}年${historyCursor.getMonth() + 1}月`;
-    dom.historyExpenseTotal.textContent = yen(expense);
-    dom.historyIncomeTotal.textContent = yen(income);
-    renderTransactionList(dom.historyTransactionList, monthTransactions, false);
-  }
-
-  function renderTransactionList(container, items, compact) {
-    if (!items.length) {
-      container.innerHTML = `<div class="empty-state">${compact ? '今日はまだ記録がないよ。' : 'この月の記録はまだないよ。'}</div>`;
-      return;
-    }
-    container.innerHTML = items.map(item => {
-      const category = getCategory(item.categoryId) || getCategory('other');
-      const label = item.memo || category.name;
-      const meta = `${formatShortDate(item.date)} ・ ${item.payment || '未設定'} ・ ${category.name}`;
-      return `<article class="transaction-row" data-transaction-id="${item.id}">
-        <div class="transaction-icon">${category.icon}</div>
-        <div class="transaction-copy"><strong>${escapeHtml(label)}</strong><span>${escapeHtml(meta)}</span></div>
-        <div class="transaction-amount ${item.type}">${item.type === 'income' ? '+' : '-'}${yen(item.amount)}</div>
-        ${compact ? '' : '<button class="delete-row bounce-button" type="button">削除</button>'}
-      </article>`;
-    }).join('');
-    if (!compact) {
-      container.querySelectorAll('.delete-row').forEach(btn => {
-        btn.addEventListener('click', () => {
-          const id = btn.closest('[data-transaction-id]').dataset.transactionId;
-          const item = state.transactions.find(t => t.id === id);
-          showConfirm('この記録を削除する？', item ? `${item.memo || getCategory(item.categoryId)?.name || '記録'} ${yen(item.amount)}` : 'この記録を削除します。', async () => {
-            state.transactions = state.transactions.filter(t => t.id !== id);
-            await persistState();
-            renderAll();
-            showToast('記録を削除したよ');
-          });
-        });
-      });
-    }
-  }
-
-  function renderBudgetPage() {
-    dom.budgetInput.value = formatInputMoney(state.budget || 0);
-    if (!state.fixedCosts.length) {
-      dom.fixedCostList.innerHTML = '<div class="empty-state">固定費はまだないよ。「＋ 追加」から登録できます。</div>';
-    } else {
-      dom.fixedCostList.innerHTML = state.fixedCosts.map(item => `<div class="fixed-cost-row" data-fixed-id="${item.id}"><strong>${escapeHtml(item.name)}</strong><span>${yen(item.amount)}</span><button class="bounce-button" type="button">削除</button></div>`).join('');
-      dom.fixedCostList.querySelectorAll('[data-fixed-id] button').forEach(btn => btn.addEventListener('click', () => {
-        const id = btn.closest('[data-fixed-id]').dataset.fixedId;
-        const item = state.fixedCosts.find(f => f.id === id);
-        showConfirm('固定費を削除する？', item ? `${item.name} ${yen(item.amount)}` : 'この固定費を削除します。', async () => {
-          state.fixedCosts = state.fixedCosts.filter(f => f.id !== id);
-          await persistState();
-          renderBudgetPage();
-          showToast('固定費を削除したよ');
-        });
-      }));
-    }
-    dom.fixedCostTotal.textContent = yen(sum(state.fixedCosts.map(f => f.amount)));
-  }
-
-  function renderSavings() {
-    const balance = Math.max(0, state.savings.balance || 0);
-    const goal = Math.max(0, state.savings.goal || 0);
-    const ratio = goal > 0 ? Math.min(balance / goal, 1) : 0;
-    dom.savingsBalanceDisplay.textContent = yen(balance);
-    dom.savingsGoalDisplay.textContent = yen(goal);
-    dom.savingsRemainingDisplay.textContent = goal > 0 ? `あと ${yen(Math.max(0, goal - balance))}` : '目標を設定してね';
-    dom.savingsPercent.textContent = goal > 0 ? `${Math.round(ratio * 100)}%` : '—';
-    dom.savingsDonut.style.setProperty('--progress', `${ratio * 360}deg`);
-    dom.savingsBalanceInput.value = formatInputMoney(balance);
-    dom.savingsGoalInput.value = formatInputMoney(goal);
-  }
-
-  function bindDataActions() {
-    document.getElementById('exportJsonBtn').addEventListener('click', () => {
-      const payload = JSON.stringify({ ...state, exportedAt: new Date().toISOString(), version: VERSION }, null, 2);
-      const blob = new Blob([payload], { type: 'application/json' });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `${VERSION}_kakeibo_backup_${todayIso()}.json`;
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-      URL.revokeObjectURL(url);
-      showToast('JSONを書き出したよ');
-    });
-
-    dom.importJsonInput.addEventListener('change', async event => {
-      const file = event.target.files?.[0];
-      event.target.value = '';
-      if (!file) return;
-      try {
-        const text = await file.text();
-        const imported = normalizeState(JSON.parse(text));
-        showConfirm('バックアップを読み込む？', '現在の端末内データは、読み込んだ内容で置き換わります。', async () => {
-          state = imported;
-          await persistState();
-          renderAll();
-          showToast('バックアップを読み込んだよ');
-        }, '読み込む');
-      } catch (error) {
-        console.error(error);
-        showToast('JSONを読み込めなかったよ');
-      }
-    });
-
-    document.getElementById('resetDataBtn').addEventListener('click', () => {
-      showConfirm('すべて初期化する？', '支出・収入・予算・固定費・貯金のデータが、この端末から削除されます。', async () => {
-        state = structuredClone(DEFAULT_STATE);
-        await persistState();
-        historyCursor = startOfMonth(new Date());
-        renderAll();
-        showToast('初期状態に戻したよ');
-      }, '初期化する');
-    });
-  }
-
-  function bindGlobalZoomGuards() {
-    let lastTouchEnd = 0;
-    document.addEventListener('touchend', event => {
-      const now = Date.now();
-      if (now - lastTouchEnd <= 300 && !isTextInput(event.target)) event.preventDefault();
-      lastTouchEnd = now;
-    }, { passive: false });
-
-    document.addEventListener('gesturestart', event => event.preventDefault(), { passive: false });
-    document.addEventListener('gesturechange', event => event.preventDefault(), { passive: false });
-    document.addEventListener('gestureend', event => event.preventDefault(), { passive: false });
-    document.addEventListener('wheel', event => {
-      if (event.ctrlKey || event.metaKey) event.preventDefault();
-    }, { passive: false });
-  }
-
-  function isTextInput(target) {
-    return target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement || target instanceof HTMLSelectElement;
-  }
-
-  function pulse(el) {
-    el.animate([
-      { transform: 'scale(1)' },
-      { transform: 'scale(.88)' },
-      { transform: 'scale(1.08)' },
-      { transform: 'scale(1)' }
-    ], { duration: 300, easing: 'ease-out' });
-  }
-
-  function moneyFieldFormatter(event) {
-    const value = parseMoney(event.target.value);
-    event.target.value = value ? formatInputMoney(value) : '';
-  }
-
-  function parseMoney(value) {
-    const digits = String(value ?? '').replace(/[^0-9]/g, '');
-    return digits ? Number(digits) : 0;
-  }
-
-  function formatInputMoney(value) {
-    const number = Number(value) || 0;
-    return number.toLocaleString('ja-JP');
-  }
-
-  function yen(value) {
-    return `¥${Math.round(Number(value) || 0).toLocaleString('ja-JP')}`;
-  }
-
-  function signedYen(value) {
-    const n = Math.round(Number(value) || 0);
-    if (n > 0) return `+${yen(n)}`;
-    if (n < 0) return `-${yen(Math.abs(n))}`;
-    return yen(0);
-  }
-
-  function sum(values) { return values.reduce((total, value) => total + (Number(value) || 0), 0); }
-  function getCategory(id) { return CATEGORIES.find(c => c.id === id); }
-
-  function todayIso() {
-    const now = new Date();
-    return localIso(now);
-  }
-
-  function localIso(date) {
-    const y = date.getFullYear();
-    const m = String(date.getMonth() + 1).padStart(2, '0');
-    const d = String(date.getDate()).padStart(2, '0');
-    return `${y}-${m}-${d}`;
-  }
-
-  function parseLocalDate(iso) {
-    const [y, m, d] = String(iso).split('-').map(Number);
-    return new Date(y, (m || 1) - 1, d || 1);
-  }
-
-  function formatShortDate(iso) {
-    const date = parseLocalDate(iso);
-    return `${date.getMonth() + 1}/${date.getDate()}`;
-  }
-
-  function isSameMonth(a, b) { return a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth(); }
-  function startOfMonth(date) { return new Date(date.getFullYear(), date.getMonth(), 1); }
-  function setTodayDefaults() { if (dom.transactionDate) dom.transactionDate.value = todayIso(); }
-
-  function escapeHtml(value) {
-    return String(value ?? '').replace(/[&<>'"]/g, char => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', "'":'&#39;', '"':'&quot;' }[char]));
-  }
-
-  function safeParse(text) {
-    try { return text ? JSON.parse(text) : null; } catch { return null; }
-  }
-
-  function normalizeState(input) {
-    const normalized = structuredClone(DEFAULT_STATE);
-    if (!input || typeof input !== 'object') return normalized;
-    normalized.version = VERSION;
-    normalized.budget = Number.isFinite(Number(input.budget)) ? Math.max(0, Number(input.budget)) : DEFAULT_STATE.budget;
-    normalized.savings = {
-      balance: Math.max(0, Number(input.savings?.balance) || 0),
-      goal: Math.max(0, Number(input.savings?.goal) || DEFAULT_STATE.savings.goal)
-    };
-    normalized.fixedCosts = Array.isArray(input.fixedCosts) ? input.fixedCosts.map(item => ({
-      id: String(item.id || `${Date.now()}-${Math.random()}`),
-      name: String(item.name || '固定費').slice(0, 30),
-      amount: Math.max(0, Number(item.amount) || 0)
-    })).filter(item => item.amount > 0) : [];
-    normalized.transactions = Array.isArray(input.transactions) ? input.transactions.map(item => ({
-      id: String(item.id || `${Date.now()}-${Math.random()}`),
-      type: item.type === 'income' ? 'income' : 'expense',
-      amount: Math.max(0, Number(item.amount) || 0),
-      categoryId: getCategory(String(item.categoryId)) ? String(item.categoryId) : (item.type === 'income' ? 'refund' : 'other'),
-      date: /^\d{4}-\d{2}-\d{2}$/.test(String(item.date)) ? String(item.date) : todayIso(),
-      payment: String(item.payment || '現金').slice(0, 30),
-      memo: String(item.memo || '').slice(0, 80),
-      createdAt: String(item.createdAt || new Date().toISOString())
-    })).filter(item => item.amount > 0) : [];
-    return normalized;
-  }
-
-  async function persistState() {
-    state.version = VERSION;
-    try {
-      if (db) await dbPut(STATE_KEY, state);
-      else localStorage.setItem('kotsukotsu-kakeibo-state', JSON.stringify(state));
-    } catch (error) {
-      console.warn('Persist failed, using localStorage.', error);
-      localStorage.setItem('kotsukotsu-kakeibo-state', JSON.stringify(state));
-    }
-  }
-
-  function openDatabase() {
-    return new Promise((resolve, reject) => {
-      if (!('indexedDB' in window)) return reject(new Error('IndexedDB unavailable'));
-      const request = indexedDB.open(DB_NAME, DB_VERSION);
-      request.onupgradeneeded = () => {
-        const database = request.result;
-        if (!database.objectStoreNames.contains(STORE_NAME)) database.createObjectStore(STORE_NAME);
-      };
-      request.onsuccess = () => resolve(request.result);
-      request.onerror = () => reject(request.error);
-    });
-  }
-
-  function dbGet(key) {
-    return new Promise((resolve, reject) => {
-      const tx = db.transaction(STORE_NAME, 'readonly');
-      const req = tx.objectStore(STORE_NAME).get(key);
-      req.onsuccess = () => resolve(req.result);
-      req.onerror = () => reject(req.error);
-    });
-  }
-
-  function dbPut(key, value) {
-    return new Promise((resolve, reject) => {
-      const tx = db.transaction(STORE_NAME, 'readwrite');
-      tx.objectStore(STORE_NAME).put(value, key);
-      tx.oncomplete = () => resolve();
-      tx.onerror = () => reject(tx.error);
-    });
-  }
-
-  function showToast(message) {
-    clearTimeout(toastTimer);
-    dom.toast.textContent = message;
-    dom.toast.classList.add('is-show');
-    toastTimer = setTimeout(() => dom.toast.classList.remove('is-show'), 1900);
-  }
-
-  function svg(paths) {
-    return `<svg viewBox="0 0 32 32" role="img" aria-hidden="true" focusable="false">${paths}</svg>`;
-  }
-  const stroke = `fill="none" stroke="#6a523d" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"`;
-  const fill = `fill="#f3d770" stroke="#6a523d" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"`;
-
-  function iconBowl(){return svg(`<path ${fill} d="M6 14h20c0 7-4.6 11-10 11S6 21 6 14Z"/><path ${stroke} d="M10 10c1.4-3 3.1-3 4.5 0M17 9c1.3-2.5 2.8-2.5 4 0M9 27h14"/>`)}
-  function iconBottle(){return svg(`<path ${fill} d="M12 5h8v5c2 1.6 3 4 3 7v8H9v-8c0-3 1-5.4 3-7V5Z"/><path ${stroke} d="M11 14h10M13 4h6"/>`)}
-  function iconGame(){return svg(`<path ${fill} d="M9 11h14c3 0 5 2.3 5 5.2v4.2c0 3.2-3 4.2-5 2.2l-2.2-2.2h-9.6L9 22.6c-2 2-5 1-5-2.2v-4.2C4 13.3 6 11 9 11Z"/><path ${stroke} d="M10 15v5M7.5 17.5h5M21 16.2h.1M24 19h.1"/>`)}
-  function iconPen(){return svg(`<path ${fill} d="m8 23 2-6L21 6l5 5-11 11-7 1Z"/><path ${stroke} d="m18 9 5 5M8 23l5-1-3-3-2 4Z"/>`)}
-  function iconRibbon(){return svg(`<path ${fill} d="M16 14c-2-5-8-7-10-3-1.7 3 2 7 10 5M16 14c2-5 8-7 10-3 1.7 3-2 7-10 5Z"/><path ${fill} d="m13 16-5 10 7-3 1-6m3-1 5 10-7-3-1-6"/><circle ${fill} cx="16" cy="15" r="3"/>`)}
-  function iconTrain(){return svg(`<rect ${fill} x="8" y="5" width="16" height="20" rx="5"/><path ${stroke} d="M11 9h10v7H11zM12 28l2-3m6 3-2-3M11 20h.1M21 20h.1"/>`)}
-  function iconCross(){return svg(`<rect ${fill} x="5" y="5" width="22" height="22" rx="7"/><path ${stroke} d="M16 10v12M10 16h12"/>`)}
-  function iconHouse(){return svg(`<path ${fill} d="m5 15 11-9 11 9v12H5V15Z"/><path ${stroke} d="M12 27v-8h8v8M9 14h.1"/>`)}
-  function iconLoop(){return svg(`<path ${stroke} d="M8 11a10 10 0 0 1 16 1l2 3M24 21a10 10 0 0 1-16-1l-2-3"/><path ${fill} d="m24 9 2 6-6-1m-12 9-2-6 6 1"/>`)}
-  function iconDots(){return svg(`<rect ${fill} x="5" y="5" width="22" height="22" rx="7"/><circle fill="#6a523d" cx="11" cy="16" r="2"/><circle fill="#6a523d" cx="16" cy="16" r="2"/><circle fill="#6a523d" cx="21" cy="16" r="2"/>`)}
-  function iconWallet(){return svg(`<path ${fill} d="M6 9h18c2 0 3 1 3 3v12H7c-2 0-3-1.5-3-3V9c0-2 1.6-4 4-4h13v4"/><path ${stroke} d="M21 15h6v6h-6a3 3 0 0 1 0-6Z"/>`)}
-  function iconReturn(){return svg(`<path ${fill} d="M9 7 4 12l5 5v-3h7c6 0 10 3 11 9-2-3-5-5-10-5H9v4l-5-5 5-5V7Z"/>`)}
-})();
+function registerServiceWorker(){ if('serviceWorker' in navigator && location.protocol.startsWith('http')) navigator.serviceWorker.register('./service-worker.js', { updateViaCache:'none' }).catch(err=>console.warn('SW registration failed',err)); }
+function normalizeState(v){ return { budget:Number.isFinite(Number(v?.budget))?Math.max(0,Number(v.budget)):DEFAULT_STATE.budget, transactions:Array.isArray(v?.transactions)?v.transactions.filter(Boolean):[], fixedCosts:Array.isArray(v?.fixedCosts)?v.fixedCosts.filter(Boolean):[], savings:{balance:Math.max(0,Number(v?.savings?.balance)||0),goal:Number.isFinite(Number(v?.savings?.goal))?Math.max(0,Number(v.savings.goal)):DEFAULT_STATE.savings.goal} }; }
+function getCategory(id){ return CATEGORIES.find(c=>c.id===id) || CATEGORIES.find(c=>c.id==='other'); }
+function transactionsForMonth(date){ return state.transactions.filter(t=>{ const d=parseLocalDate(t.date); return d.getFullYear()===date.getFullYear()&&d.getMonth()===date.getMonth(); }); }
+function parseMoney(v){ return Math.max(0,Number(String(v??'').replace(/[^0-9]/g,''))||0); }
+function moneyFieldFormatter(e){ const value=parseMoney(e.target.value); e.target.value=value?formatInputMoney(value):''; }
+function formatInputMoney(v){ return Number(v||0).toLocaleString('ja-JP'); }
+function yen(v){ return `¥${Math.round(Number(v)||0).toLocaleString('ja-JP')}`; }
+function compactYen(v){ const n=Math.round(Number(v)||0); if(n>=1000000) return `¥${(n/10000).toFixed(n%10000?1:0)}万`; if(n>=10000) return `¥${(n/10000).toFixed(n%10000?1:0)}万`; return `¥${n.toLocaleString('ja-JP')}`; }
+function signedYen(v){ const n=Math.round(Number(v)||0); return `${n>0?'+':n<0?'−':''}${yen(Math.abs(n))}`; }
+function signedRemaining(v){ const n=Math.round(Number(v)||0); return n<0?`−${yen(Math.abs(n))}`:yen(n); }
+function sum(list){ return list.reduce((a,b)=>a+(Number(b)||0),0); }
+function sortNewest(a,b){ return (b.createdAt||'').localeCompare(a.createdAt||''); }
+function todayIso(){ return localIso(new Date()); }
+function localIso(d){ const y=d.getFullYear(),m=String(d.getMonth()+1).padStart(2,'0'),day=String(d.getDate()).padStart(2,'0'); return `${y}-${m}-${day}`; }
+function parseLocalDate(s){ const [y,m,d]=String(s).split('-').map(Number); return new Date(y||1970,(m||1)-1,d||1); }
+function startOfMonth(d){ return new Date(d.getFullYear(),d.getMonth(),1); }
+function uid(){ return crypto.randomUUID?crypto.randomUUID():`${Date.now()}-${Math.random().toString(16).slice(2)}`; }
+function escapeHtml(v){ return String(v??'').replace(/[&<>'"]/g,ch=>({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[ch])); }
+function structuredCloneSafe(v){ return typeof structuredClone==='function'?structuredClone(v):JSON.parse(JSON.stringify(v)); }
