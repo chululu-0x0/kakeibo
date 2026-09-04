@@ -6,7 +6,7 @@
   <meta name="theme-color" content="#fff5c9" />
   <meta name="color-scheme" content="light" />
   <title>こつこつ家計簿</title>
-  <link rel="stylesheet" href="./style.css?v=1.2" />
+  <link rel="stylesheet" href="./style.css?v=1.3" />
 </head>
 <body>
   <div class="app-shell" id="appShell">
@@ -63,6 +63,10 @@
           <div class="section-heading"><div><p class="mini-label">SAVINGS</p><h2>貯金</h2></div><button class="text-button pop-button" data-go-page="savings" type="button">くわしく</button></div>
           <div class="savings-preview"><div><span>現在</span><strong id="homeSavingsBalance">¥0</strong></div><div class="mini-progress"><span id="homeSavingsProgress"></span></div><small id="homeSavingsCaption">目標未設定</small></div>
         </section>
+        <section class="section-card soft-card">
+          <div class="section-heading"><div><p class="mini-label">WISH LIST</p><h2>ほしいもの</h2></div><button class="text-button pop-button" data-go-page="savings" type="button">一覧を見る</button></div>
+          <div class="home-wishlist-preview" id="homeWishlistPreview"><span>0件</span><strong>合計 ¥0</strong></div>
+        </section>
       </section>
 
       <section class="page calendar-page" data-page="history" aria-label="カレンダー">
@@ -99,13 +103,33 @@
         </section>
       </section>
 
-      <section class="page" data-page="savings" aria-label="貯金">
-        <section class="page-title-row"><div><p class="mini-label">SAVINGS</p><h2>貯金</h2></div></section>
+      <section class="page" data-page="savings" aria-label="貯金とほしいもの">
+        <section class="page-title-row"><div><p class="mini-label">SAVINGS & WISHES</p><h2>貯金とほしいもの</h2></div></section>
+
         <section class="section-card soft-card">
+          <div class="section-heading"><div><p class="mini-label">TOTAL SAVINGS</p><h2>全体の貯金</h2></div></div>
           <div class="savings-big-number"><span>現在の貯金</span><strong id="savingsBalanceDisplay">¥0</strong></div>
           <div class="savings-ring-row"><div class="small-donut" id="savingsDonut" style="--progress:0deg"><span id="savingsPercent">0%</span></div><div><span>目標</span><strong id="savingsGoalDisplay">¥0</strong><small id="savingsRemainingDisplay">あと ¥0</small></div></div>
           <div class="form-grid two-col"><label><span>現在額</span><input id="savingsBalanceInput" inputmode="numeric" type="text" maxlength="12" /></label><label><span>目標額</span><input id="savingsGoalInput" inputmode="numeric" type="text" maxlength="12" /></label></div>
           <button class="primary-button pop-button" id="saveSavingsBtn" type="button">貯金情報を保存</button>
+        </section>
+
+        <section class="section-card soft-card">
+          <div class="section-heading">
+            <div><p class="mini-label">SAVING GOALS</p><h2>目的別貯金</h2></div>
+            <button class="small-add-button pop-button" id="addSavingGoalBtn" type="button">＋ 追加</button>
+          </div>
+          <p class="helper-text goal-note">旅行や買い替えなど、目的ごとの積立目標を管理できます。全体の貯金額とは独立した目標管理です。</p>
+          <div class="saving-goal-list" id="savingGoalList"></div>
+        </section>
+
+        <section class="section-card soft-card wishlist-section">
+          <div class="section-heading">
+            <div><p class="mini-label">WISH LIST</p><h2>ほしいもの</h2></div>
+            <button class="small-add-button pop-button" id="addWishlistBtn" type="button">＋ 追加</button>
+          </div>
+          <div class="wishlist-summary" id="wishlistSummary"><span>0件</span><strong>合計 ¥0</strong></div>
+          <div class="wishlist-list" id="wishlistList"></div>
         </section>
       </section>
 
@@ -114,9 +138,9 @@
         <section class="section-card soft-card">
           <div class="section-heading"><div><p class="mini-label">DATA</p><h2>バックアップ</h2></div></div>
           <div class="settings-actions"><button class="secondary-button pop-button" id="exportJsonBtn" type="button">JSONを書き出す</button><label class="secondary-button pop-button file-button" for="importJsonInput">JSONを読み込む</label><input id="importJsonInput" type="file" accept="application/json,.json" hidden /></div>
-          <p class="helper-text">支出・収入、予算、固定費、貯金情報をまとめて保存できます。</p>
+          <p class="helper-text">支出・収入、予算、固定費、貯金、目的別貯金、ほしいものをまとめて保存できます。</p>
         </section>
-        <section class="section-card soft-card"><div class="info-list"><div><span>バージョン</span><strong>v1.2</strong></div><div><span>保存先</span><strong>IndexedDB</strong></div><div><span>オフライン</span><strong>Service Worker</strong></div></div></section>
+        <section class="section-card soft-card"><div class="info-list"><div><span>バージョン</span><strong>v1.3</strong></div><div><span>保存先</span><strong>IndexedDB</strong></div><div><span>オフライン</span><strong>Service Worker</strong></div></div></section>
         <section class="danger-zone soft-card"><div><strong>すべてのデータを初期化</strong><span>この端末内の家計簿データを削除します。</span></div><button class="danger-button pop-button" id="resetDataBtn" type="button">初期化</button></section>
       </section>
     </main>
@@ -150,10 +174,14 @@
           <div class="category-picker" id="categoryPicker"></div>
         </div>
 
-        <label class="compact-form-row" for="transactionDate">
+        <div class="compact-form-row">
           <span class="compact-row-label">日付</span>
-          <span class="compact-row-control"><input id="transactionDate" type="date" required /></span>
-        </label>
+          <div class="compact-row-control date-stepper">
+            <button class="date-step-button pop-button" id="prevTransactionDate" type="button" aria-label="1日前">◀︎</button>
+            <input id="transactionDate" type="date" required aria-label="記録する日付" />
+            <button class="date-step-button pop-button" id="nextTransactionDate" type="button" aria-label="1日後">▶︎</button>
+          </div>
+        </div>
         <label class="compact-form-row" for="paymentMethod">
           <span class="compact-row-label">支払い方法</span>
           <span class="compact-row-control"><select id="paymentMethod"><option>現金</option><option>クレジットカード</option><option>PayPay</option><option>銀行振込</option><option>その他</option></select></span>
@@ -175,11 +203,55 @@
     </section>
   </div>
 
+  <div class="modal-backdrop" id="wishlistModal" aria-hidden="true">
+    <section class="modal-sheet small-sheet" role="dialog" aria-modal="true" aria-labelledby="wishlistModalTitle">
+      <div class="modal-handle"></div>
+      <div class="modal-header"><h2 id="wishlistModalTitle">ほしいものを追加</h2><button class="icon-close pop-button" data-close-modal="wishlistModal" type="button">×</button></div>
+      <form id="wishlistForm" class="stack-form">
+        <label class="full-field"><span>名前</span><input id="wishlistName" maxlength="40" placeholder="ゲーム、グッズなど" required /></label>
+        <label class="full-field"><span>金額</span><div class="inline-money"><span>¥</span><input id="wishlistPrice" inputmode="numeric" maxlength="12" required /></div></label>
+        <div class="form-grid two-col wishlist-meta-grid">
+          <label><span>カテゴリー</span><select id="wishlistCategory"></select></label>
+          <label><span>支払い方法</span><select id="wishlistPayment"><option>現金</option><option>クレジットカード</option><option>PayPay</option><option>銀行振込</option><option>その他</option></select></label>
+        </div>
+        <label class="full-field"><span>メモ</span><input id="wishlistMemo" maxlength="60" placeholder="限定版、発売日など" /></label>
+        <button class="primary-button pop-button" type="submit">リストに追加</button>
+      </form>
+    </section>
+  </div>
+
+  <div class="modal-backdrop" id="savingGoalModal" aria-hidden="true">
+    <section class="modal-sheet small-sheet" role="dialog" aria-modal="true" aria-labelledby="savingGoalModalTitle">
+      <div class="modal-handle"></div>
+      <div class="modal-header"><h2 id="savingGoalModalTitle">目的別貯金を追加</h2><button class="icon-close pop-button" data-close-modal="savingGoalModal" type="button">×</button></div>
+      <form id="savingGoalForm" class="stack-form">
+        <label class="full-field"><span>目標名</span><input id="savingGoalName" maxlength="40" placeholder="旅行、PC買い替えなど" required /></label>
+        <div class="form-grid two-col">
+          <label><span>現在額</span><input id="savingGoalCurrent" inputmode="numeric" maxlength="12" placeholder="0" /></label>
+          <label><span>目標額</span><input id="savingGoalTarget" inputmode="numeric" maxlength="12" placeholder="100,000" required /></label>
+        </div>
+        <button class="primary-button pop-button" type="submit">目標を追加</button>
+      </form>
+    </section>
+  </div>
+
+  <div class="modal-backdrop" id="savingDepositModal" aria-hidden="true">
+    <section class="modal-sheet small-sheet deposit-sheet" role="dialog" aria-modal="true" aria-labelledby="savingDepositTitle">
+      <div class="modal-handle"></div>
+      <div class="modal-header"><div><p class="mini-label">ADD SAVINGS</p><h2 id="savingDepositTitle">積み立てる</h2></div><button class="icon-close pop-button" data-close-modal="savingDepositModal" type="button">×</button></div>
+      <form id="savingDepositForm" class="stack-form">
+        <label class="full-field"><span>追加する金額</span><div class="inline-money"><span>¥</span><input id="savingDepositAmount" inputmode="numeric" maxlength="12" required /></div></label>
+        <div class="quick-deposit-buttons"><button type="button" class="pop-button" data-deposit-amount="1000">+1,000</button><button type="button" class="pop-button" data-deposit-amount="5000">+5,000</button><button type="button" class="pop-button" data-deposit-amount="10000">+10,000</button></div>
+        <button class="primary-button pop-button" type="submit">積み立てる</button>
+      </form>
+    </section>
+  </div>
+
   <div class="modal-backdrop" id="confirmModal" aria-hidden="true">
     <section class="modal-sheet confirm-sheet" role="dialog" aria-modal="true"><div class="confirm-icon">!</div><h2 id="confirmTitle">確認</h2><p id="confirmMessage"></p><div class="confirm-actions"><button class="secondary-button pop-button" id="confirmCancelBtn" type="button">キャンセル</button><button class="danger-button pop-button" id="confirmOkBtn" type="button">削除する</button></div></section>
   </div>
 
   <div class="toast" id="toast" role="status" aria-live="polite"></div>
-  <script src="./script.js?v=1.2" defer></script>
+  <script src="./script.js?v=1.3" defer></script>
 </body>
 </html>

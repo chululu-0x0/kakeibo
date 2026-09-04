@@ -1,6 +1,6 @@
 'use strict';
-const CACHE_NAME='kotsukotsu-kakeibo-v1.2';
-const APP_SHELL=['./','./index.html','./style.css?v=1.2','./script.js?v=1.2'];
+const CACHE_NAME='kotsukotsu-kakeibo-v1.3';
+const APP_SHELL=['./','./index.html','./style.css?v=1.3','./script.js?v=1.3'];
 self.addEventListener('install',event=>{event.waitUntil(caches.open(CACHE_NAME).then(cache=>cache.addAll(APP_SHELL)).then(()=>self.skipWaiting()));});
 self.addEventListener('activate',event=>{event.waitUntil(caches.keys().then(keys=>Promise.all(keys.filter(k=>k.startsWith('kotsukotsu-kakeibo-')&&k!==CACHE_NAME).map(k=>caches.delete(k)))).then(()=>self.clients.claim()));});
 self.addEventListener('fetch',event=>{

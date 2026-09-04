@@ -4,13 +4,15 @@ const DB_NAME = 'kotsukotsu-kakeibo';
 const DB_VERSION = 1;
 const STORE_NAME = 'app';
 const STATE_KEY = 'state';
-const APP_VERSION = '1.2';
+const APP_VERSION = '1.3';
 
 const DEFAULT_STATE = {
   budget: 80000,
   transactions: [],
   fixedCosts: [],
-  savings: { balance: 0, goal: 1500000 }
+  savings: { balance: 0, goal: 1500000 },
+  savingGoals: [],
+  wishlist: []
 };
 
 const icon = (body, bg = '#fff3bf') => `
@@ -48,6 +50,7 @@ let historyCursor = startOfMonth(new Date());
 let selectedCalendarDate = todayIso();
 let confirmAction = null;
 let toastTimer = null;
+let activeSavingGoalId = null;
 
 const $ = id => document.getElementById(id);
 const dom = {};
@@ -63,6 +66,7 @@ async function init(){
   state = normalizeState(loaded || DEFAULT_STATE);
   $('transactionDate').value = todayIso();
   renderCategoryPicker();
+  renderWishlistCategoryOptions();
   renderAll();
   registerServiceWorker();
 }
@@ -82,6 +86,10 @@ function bindEvents(){
   dom.nextHistoryMonth.addEventListener('click', () => moveHistoryMonth(1));
   dom.jumpTodayBtn.addEventListener('click', () => { historyCursor = startOfMonth(new Date()); selectedCalendarDate = todayIso(); renderHistory(); });
   dom.addFixedCostBtn.addEventListener('click', () => openModal('fixedCostModal'));
+  dom.addWishlistBtn.addEventListener('click', () => { dom.wishlistForm.reset(); dom.wishlistPayment.value = '現金'; renderWishlistCategoryOptions(); openModal('wishlistModal'); });
+  dom.addSavingGoalBtn.addEventListener('click', () => { dom.savingGoalForm.reset(); openModal('savingGoalModal'); });
+  dom.prevTransactionDate.addEventListener('click', () => stepTransactionDate(-1));
+  dom.nextTransactionDate.addEventListener('click', () => stepTransactionDate(1));
 
   document.querySelectorAll('[data-close-modal]').forEach(btn => btn.addEventListener('click', () => closeModal(btn.dataset.closeModal)));
   document.querySelectorAll('.modal-backdrop').forEach(backdrop => backdrop.addEventListener('click', e => { if(e.target === backdrop && backdrop.id !== 'confirmModal') closeModal(backdrop.id); }));
@@ -102,12 +110,19 @@ function bindEvents(){
     const btn = e.target.closest('[data-add-amount]'); if(!btn) return;
     dom.transactionAmount.value = formatInputMoney(parseMoney(dom.transactionAmount.value) + Number(btn.dataset.addAmount)); pop(btn);
   });
+  document.querySelector('.quick-deposit-buttons').addEventListener('click', e => {
+    const btn = e.target.closest('[data-deposit-amount]'); if(!btn) return;
+    dom.savingDepositAmount.value = formatInputMoney(parseMoney(dom.savingDepositAmount.value) + Number(btn.dataset.depositAmount)); pop(btn);
+  });
 
-  [dom.transactionAmount, dom.fixedCostAmount, dom.budgetInput, dom.savingsBalanceInput, dom.savingsGoalInput].forEach(el => el.addEventListener('input', moneyFieldFormatter));
+  [dom.transactionAmount, dom.fixedCostAmount, dom.budgetInput, dom.savingsBalanceInput, dom.savingsGoalInput, dom.wishlistPrice, dom.savingGoalCurrent, dom.savingGoalTarget, dom.savingDepositAmount].forEach(el => el.addEventListener('input', moneyFieldFormatter));
   dom.transactionForm.addEventListener('submit', saveTransaction);
   dom.saveBudgetBtn.addEventListener('click', saveBudget);
   dom.fixedCostForm.addEventListener('submit', saveFixedCost);
   dom.saveSavingsBtn.addEventListener('click', saveSavings);
+  dom.wishlistForm.addEventListener('submit', saveWishlistItem);
+  dom.savingGoalForm.addEventListener('submit', saveSavingGoal);
+  dom.savingDepositForm.addEventListener('submit', addSavingDeposit);
   dom.calendarGrid.addEventListener('click', e => {
     const cell = e.target.closest('[data-date]'); if(!cell) return;
     selectedCalendarDate = cell.dataset.date;
@@ -119,13 +134,40 @@ function bindEvents(){
     const txDelete = e.target.closest('[data-delete-transaction]');
     if(txDelete){ askConfirm('この記録を削除する？','削除すると元には戻せません。', async () => { state.transactions = state.transactions.filter(t => t.id !== txDelete.dataset.deleteTransaction); await persistState(); renderAll(); showToast('記録を削除したよ'); }); return; }
     const fixedDelete = e.target.closest('[data-delete-fixed]');
-    if(fixedDelete){ askConfirm('この固定費を削除する？','固定費一覧から削除します。残り使える金額も自動で再計算されます。', async () => { state.fixedCosts = state.fixedCosts.filter(x => x.id !== fixedDelete.dataset.deleteFixed); await persistState(); renderHome(); renderBudgetPage(); showToast('固定費を削除したよ'); }); }
+    if(fixedDelete){ askConfirm('この固定費を削除する？','固定費一覧から削除します。残り使える金額も自動で再計算されます。', async () => { state.fixedCosts = state.fixedCosts.filter(x => x.id !== fixedDelete.dataset.deleteFixed); await persistState(); renderHome(); renderBudgetPage(); showToast('固定費を削除したよ'); }); return; }
+
+    const wishBuy = e.target.closest('[data-purchase-wish]');
+    if(wishBuy){
+      const item = state.wishlist.find(x => x.id === wishBuy.dataset.purchaseWish); if(!item) return;
+      askConfirm('購入済みにする？',`${item.name}（${yen(item.price)}）を今日の支出として家計簿へ登録します。`, async () => purchaseWishlistItem(item.id));
+      return;
+    }
+    const wishDelete = e.target.closest('[data-delete-wish]');
+    if(wishDelete){
+      askConfirm('ほしいものから削除する？','家計簿には登録せず、リストからだけ削除します。', async () => {
+        state.wishlist = state.wishlist.filter(x => x.id !== wishDelete.dataset.deleteWish);
+        await persistState(); renderSavings(); showToast('リストから削除したよ');
+      });
+      return;
+    }
+    const goalDeposit = e.target.closest('[data-deposit-goal]');
+    if(goalDeposit){
+      const goal = state.savingGoals.find(x => x.id === goalDeposit.dataset.depositGoal); if(!goal) return;
+      activeSavingGoalId = goal.id; dom.savingDepositTitle.textContent = `${goal.name}に積み立て`; dom.savingDepositAmount.value = ''; openModal('savingDepositModal'); return;
+    }
+    const goalDelete = e.target.closest('[data-delete-goal]');
+    if(goalDelete){
+      askConfirm('この貯金目標を削除する？','目的別貯金の目標と現在額を削除します。', async () => {
+        state.savingGoals = state.savingGoals.filter(x => x.id !== goalDelete.dataset.deleteGoal);
+        await persistState(); renderSavings(); showToast('貯金目標を削除したよ');
+      });
+    }
   });
   dom.confirmCancelBtn.addEventListener('click', () => { confirmAction = null; closeModal('confirmModal'); });
   dom.confirmOkBtn.addEventListener('click', async () => { const fn = confirmAction; confirmAction = null; closeModal('confirmModal'); if(fn) await fn(); });
   dom.exportJsonBtn.addEventListener('click', exportJson);
   dom.importJsonInput.addEventListener('change', importJson);
-  dom.resetDataBtn.addEventListener('click', () => askConfirm('全部初期化する？','支出・収入・予算・固定費・貯金のデータをこの端末から削除します。', resetAllData));
+  dom.resetDataBtn.addEventListener('click', () => askConfirm('全部初期化する？','支出・収入・予算・固定費・貯金・目的別貯金・ほしいものをこの端末から削除します。', resetAllData));
   document.addEventListener('keydown', e => { if(e.key === 'Escape'){ const open = [...document.querySelectorAll('.modal-backdrop.is-open')].pop(); if(open && open.id !== 'confirmModal') closeModal(open.id); } });
 }
 
@@ -155,6 +197,21 @@ function openTransactionModal(){
   dom.transactionAmount.value = ''; dom.transactionMemo.value = ''; dom.paymentMethod.value = '現金';
   renderCategoryPicker(); openModal('transactionModal');
   setTimeout(() => dom.transactionAmount.focus({preventScroll:true}),220);
+}
+
+function stepTransactionDate(delta){
+  const current = dom.transactionDate.value ? parseLocalDate(dom.transactionDate.value) : new Date();
+  current.setDate(current.getDate() + delta);
+  dom.transactionDate.value = localIso(current);
+  pop(delta < 0 ? dom.prevTransactionDate : dom.nextTransactionDate);
+}
+
+function renderWishlistCategoryOptions(){
+  if(!dom.wishlistCategory) return;
+  const current = dom.wishlistCategory.value || 'game';
+  const items = CATEGORIES.filter(c => !c.incomeOnly);
+  dom.wishlistCategory.innerHTML = items.map(c => `<option value="${c.id}">${escapeHtml(c.name)}</option>`).join('');
+  dom.wishlistCategory.value = items.some(c => c.id === current) ? current : (items.find(c => c.id === 'game')?.id || items[0]?.id || 'other');
 }
 
 function renderCategoryPicker(){
@@ -187,6 +244,57 @@ async function saveSavings(){
   state.savings.balance = Math.max(0,parseMoney(dom.savingsBalanceInput.value)); state.savings.goal = Math.max(0,parseMoney(dom.savingsGoalInput.value)); await persistState(); renderHome(); renderSavings(); showToast('貯金情報を保存したよ');
 }
 
+async function saveWishlistItem(e){
+  e.preventDefault();
+  const name = dom.wishlistName.value.trim();
+  const price = parseMoney(dom.wishlistPrice.value);
+  if(!name || price <= 0) return showToast('名前と金額を入力してね');
+  state.wishlist.push({
+    id:uid(), name, price,
+    categoryId:dom.wishlistCategory.value || 'other',
+    payment:dom.wishlistPayment.value || 'その他',
+    memo:dom.wishlistMemo.value.trim(),
+    createdAt:new Date().toISOString()
+  });
+  await persistState();
+  closeModal('wishlistModal'); dom.wishlistForm.reset(); renderSavings(); showToast('ほしいものに追加したよ');
+}
+
+async function purchaseWishlistItem(id){
+  const item = state.wishlist.find(x => x.id === id); if(!item) return;
+  state.transactions.push({
+    id:uid(), type:'expense', amount:item.price, categoryId:item.categoryId || 'other',
+    date:todayIso(), payment:item.payment || 'その他', memo:item.name,
+    createdAt:new Date().toISOString(), source:'wishlist'
+  });
+  state.wishlist = state.wishlist.filter(x => x.id !== id);
+  selectedCalendarDate = todayIso();
+  await persistState();
+  renderAll();
+  showToast('購入分を家計簿に登録したよ');
+}
+
+async function saveSavingGoal(e){
+  e.preventDefault();
+  const name = dom.savingGoalName.value.trim();
+  const current = parseMoney(dom.savingGoalCurrent.value);
+  const target = parseMoney(dom.savingGoalTarget.value);
+  if(!name || target <= 0) return showToast('目標名と目標額を入力してね');
+  state.savingGoals.push({id:uid(), name, current, target, createdAt:new Date().toISOString()});
+  await persistState();
+  closeModal('savingGoalModal'); dom.savingGoalForm.reset(); renderSavings(); showToast('貯金目標を追加したよ');
+}
+
+async function addSavingDeposit(e){
+  e.preventDefault();
+  const amount = parseMoney(dom.savingDepositAmount.value);
+  const goal = state.savingGoals.find(x => x.id === activeSavingGoalId);
+  if(!goal || amount <= 0) return showToast('積立額を入力してね');
+  goal.current = Math.max(0, Number(goal.current)||0) + amount;
+  await persistState();
+  closeModal('savingDepositModal'); activeSavingGoalId = null; dom.savingDepositAmount.value = ''; renderSavings(); showToast('積み立てたよ');
+}
+
 function moveHistoryMonth(delta){
   historyCursor = new Date(historyCursor.getFullYear(),historyCursor.getMonth()+delta,1);
   const today = new Date();
@@ -208,7 +316,7 @@ function renderHome(){
   const totals={}; expenses.forEach(t=>totals[t.categoryId]=(totals[t.categoryId]||0)+t.amount); const entries=Object.entries(totals).sort((a,b)=>b[1]-a[1]).slice(0,6);
   if(!entries.length) dom.categorySummary.innerHTML='<div class="empty-state">まだ支出がないよ。＋から記録してみてね。</div>';
   else { const max=Math.max(...entries.map(([,v])=>v),1); dom.categorySummary.innerHTML=entries.map(([id,v])=>`<div class="category-summary-row"><span class="name">${escapeHtml(getCategory(id)?.name||'その他')}</span><div class="category-bar"><span style="width:${Math.max(8,v/max*100)}%"></span></div><strong>${yen(v)}</strong></div>`).join(''); }
-  const goal=Math.max(0,state.savings.goal||0), balance=Math.max(0,state.savings.balance||0), ratio=goal>0?Math.min(balance/goal,1):0; dom.homeSavingsBalance.textContent=yen(balance); dom.homeSavingsCaption.textContent=goal>0?`目標 ${yen(goal)}`:'目標未設定'; dom.homeSavingsProgress.style.width=`${ratio*100}%`;
+  const goal=Math.max(0,state.savings.goal||0), balance=Math.max(0,state.savings.balance||0), ratio=goal>0?Math.min(balance/goal,1):0; dom.homeSavingsBalance.textContent=yen(balance); dom.homeSavingsCaption.textContent=goal>0?`目標 ${yen(goal)}`:'目標未設定'; dom.homeSavingsProgress.style.width=`${ratio*100}%`; const wishCount=state.wishlist.length, wishTotal=sum(state.wishlist.map(x=>x.price)); dom.homeWishlistPreview.innerHTML=`<span>${wishCount}件</span><strong>合計 ${yen(wishTotal)}</strong>`;
 }
 
 function renderHistory(){
@@ -236,7 +344,40 @@ function renderBudgetPage(){
 }
 
 function renderSavings(){
-  const balance=Math.max(0,state.savings.balance||0),goal=Math.max(0,state.savings.goal||0),ratio=goal>0?Math.min(balance/goal,1):0; dom.savingsBalanceDisplay.textContent=yen(balance); dom.savingsGoalDisplay.textContent=yen(goal); dom.savingsRemainingDisplay.textContent=`あと ${yen(Math.max(0,goal-balance))}`; dom.savingsPercent.textContent=goal>0?`${Math.round(ratio*100)}%`:'—'; dom.savingsDonut.style.setProperty('--progress',`${ratio*360}deg`); dom.savingsBalanceInput.value=formatInputMoney(balance); dom.savingsGoalInput.value=formatInputMoney(goal);
+  const balance=Math.max(0,state.savings.balance||0),goal=Math.max(0,state.savings.goal||0),ratio=goal>0?Math.min(balance/goal,1):0;
+  dom.savingsBalanceDisplay.textContent=yen(balance);
+  dom.savingsGoalDisplay.textContent=yen(goal);
+  dom.savingsRemainingDisplay.textContent=`あと ${yen(Math.max(0,goal-balance))}`;
+  dom.savingsPercent.textContent=goal>0?`${Math.round(ratio*100)}%`:'—';
+  dom.savingsDonut.style.setProperty('--progress',`${ratio*360}deg`);
+  dom.savingsBalanceInput.value=formatInputMoney(balance);
+  dom.savingsGoalInput.value=formatInputMoney(goal);
+
+  const goals=[...state.savingGoals].sort((a,b)=>(b.createdAt||'').localeCompare(a.createdAt||''));
+  dom.savingGoalList.innerHTML = goals.length ? goals.map(g=>{
+    const current=Math.max(0,Number(g.current)||0), target=Math.max(0,Number(g.target)||0);
+    const pct=target>0?Math.min(current/target*100,100):0;
+    const complete=target>0 && current>=target;
+    return `<article class="saving-goal-card ${complete?'is-complete':''}">
+      <div class="saving-goal-head"><div><strong>${escapeHtml(g.name)}</strong><small>${complete?'目標達成！':`あと ${yen(Math.max(0,target-current))}`}</small></div><button class="mini-delete pop-button" type="button" data-delete-goal="${g.id}" aria-label="削除">×</button></div>
+      <div class="saving-goal-numbers"><span>${yen(current)}</span><small>/ ${yen(target)}</small></div>
+      <div class="goal-progress"><span style="width:${pct}%"></span></div>
+      <button class="goal-deposit-button pop-button" type="button" data-deposit-goal="${g.id}">＋ 積み立て</button>
+    </article>`;
+  }).join('') : '<div class="empty-state">目的別の貯金目標はまだないよ。</div>';
+
+  const wishes=[...state.wishlist].sort((a,b)=>(b.createdAt||'').localeCompare(a.createdAt||''));
+  const wishTotal=sum(wishes.map(x=>x.price));
+  dom.wishlistSummary.innerHTML=`<span>${wishes.length}件</span><strong>合計 ${yen(wishTotal)}</strong>`;
+  dom.wishlistList.innerHTML = wishes.length ? wishes.map(w=>{
+    const c=getCategory(w.categoryId);
+    return `<article class="wishlist-card">
+      <div class="wish-icon">${c?.icon||getCategory('other').icon}</div>
+      <div class="wish-main"><strong>${escapeHtml(w.name)}</strong><small>${escapeHtml(c?.name||'その他')} ・ ${escapeHtml(w.payment||'その他')}${w.memo?` ・ ${escapeHtml(w.memo)}`:''}</small></div>
+      <strong class="wish-price">${yen(w.price)}</strong>
+      <div class="wish-actions"><button class="wish-buy pop-button" type="button" data-purchase-wish="${w.id}">購入</button><button class="mini-delete pop-button" type="button" data-delete-wish="${w.id}" aria-label="削除">×</button></div>
+    </article>`;
+  }).join('') : '<div class="empty-state">ほしいものはまだ登録されていないよ。</div>';
 }
 
 function renderTransactionList(container,items,compact){
@@ -272,7 +413,7 @@ function idbGet(key){ return new Promise((resolve,reject)=>{ const tx=db.transac
 function idbPut(key,value){ return new Promise((resolve,reject)=>{ const tx=db.transaction(STORE_NAME,'readwrite'); tx.objectStore(STORE_NAME).put(value,key); tx.oncomplete=()=>resolve(); tx.onerror=()=>reject(tx.error); }); }
 
 function registerServiceWorker(){ if('serviceWorker' in navigator && location.protocol.startsWith('http')) navigator.serviceWorker.register('./service-worker.js', { updateViaCache:'none' }).catch(err=>console.warn('SW registration failed',err)); }
-function normalizeState(v){ return { budget:Number.isFinite(Number(v?.budget))?Math.max(0,Number(v.budget)):DEFAULT_STATE.budget, transactions:Array.isArray(v?.transactions)?v.transactions.filter(Boolean):[], fixedCosts:Array.isArray(v?.fixedCosts)?v.fixedCosts.filter(Boolean):[], savings:{balance:Math.max(0,Number(v?.savings?.balance)||0),goal:Number.isFinite(Number(v?.savings?.goal))?Math.max(0,Number(v.savings.goal)):DEFAULT_STATE.savings.goal} }; }
+function normalizeState(v){ return { budget:Number.isFinite(Number(v?.budget))?Math.max(0,Number(v.budget)):DEFAULT_STATE.budget, transactions:Array.isArray(v?.transactions)?v.transactions.filter(Boolean):[], fixedCosts:Array.isArray(v?.fixedCosts)?v.fixedCosts.filter(Boolean):[], savings:{balance:Math.max(0,Number(v?.savings?.balance)||0),goal:Number.isFinite(Number(v?.savings?.goal))?Math.max(0,Number(v.savings.goal)):DEFAULT_STATE.savings.goal}, savingGoals:Array.isArray(v?.savingGoals)?v.savingGoals.filter(Boolean).map(g=>({...g,current:Math.max(0,Number(g.current)||0),target:Math.max(0,Number(g.target)||0)})):[], wishlist:Array.isArray(v?.wishlist)?v.wishlist.filter(Boolean).map(w=>({...w,price:Math.max(0,Number(w.price)||0)})):[] }; }
 function getCategory(id){ return CATEGORIES.find(c=>c.id===id) || CATEGORIES.find(c=>c.id==='other'); }
 function transactionsForMonth(date){ return state.transactions.filter(t=>{ const d=parseLocalDate(t.date); return d.getFullYear()===date.getFullYear()&&d.getMonth()===date.getMonth(); }); }
 function parseMoney(v){ return Math.max(0,Number(String(v??'').replace(/[^0-9]/g,''))||0); }
